@@ -90,7 +90,7 @@ asBaseDigitsSized :: Int -> Int -> Int -> Either String [Int]
 asBaseDigitsSized base size num =
 	case f base size num of
 		Just xs -> Right $ reverse xs
-		Nothing -> Left $ show num
+		Nothing -> Left $ "[" ++ show num ++ "]"
 	where
 		f b sz n
 			| sz == 0   = if n == 0 then Just [] else Nothing
@@ -100,7 +100,7 @@ asBaseDigitsSized base size num =
 asSingleBaseDigit :: Int -> Int -> Either String Int
 asSingleBaseDigit base num
 	| 0 <= num && num < base = Right num
-	| otherwise = Left $ show num
+	| otherwise = Left $ "[" ++ show num ++ "]"
 
 tokensOf :: (a -> Bool) -> [a] -> [Either [a] [a]]
 tokensOf pred ls
@@ -112,7 +112,7 @@ fromRadixToken :: Int -> Int -> String -> CodexList
 fromRadixToken radix blockSize s
 	= map (\block -> if length block == blockSize
 		then Right (fromBaseDigits radix $ map digitToInt block)
-		else Left block
+		else Left $ "[" ++ block ++ "]"
 	) $ splitInto blockSize s
 
 fromRadixStream :: Int -> Int -> String -> CodexList
@@ -146,7 +146,7 @@ alphaToInt ch
 intToAlpha :: Int -> Either String Char
 intToAlpha n
 	| 1 <= n && n <= 26 = Right $ chr (ord '`' + n)
-	| otherwise         = Left $ show n
+	| otherwise         = Left $ "[" ++ show n ++ "]"
 
 intToAlphaString :: Int -> Either String String
 intToAlphaString = fmap str1 . intToAlpha
