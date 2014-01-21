@@ -189,7 +189,8 @@ fromBase64Char c
 isBase64Char c = or [
 	'A' <= c && c <= 'Z',
 	'a' <= c && c <= 'z',
-	c `elem` "+/-_"]
+	'0' <= c && c <= '9',
+	c `elem` "+/-_="]
 
 
 chunkStream size = map (.&. ((shiftL 1 size) - 1)) . iterate (flip shiftR size)
