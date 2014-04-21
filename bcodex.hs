@@ -10,6 +10,7 @@ import Data.Maybe (catMaybes)
 import Data.Tuple (swap)
 import System.Environment (getArgs)
 import Text.Read (readMaybe)
+import Test.HUnit
 import qualified Data.Map as M (Map, fromList, lookup)
 
 -- A command-line utility for converting between "encodings".
@@ -23,9 +24,15 @@ type CodexList = [Either String Int]
 type CodexOutput = [Either String String]
 
 -- higher-order operations on Either
+swapEither :: Either a b -> Either b a
+swapEither (Left x) = Right x
+swapEither (Right x) = Left x
 
 mapRights :: (Functor f) => (a -> b) -> f (Either c a) -> f (Either c b)
 mapRights = fmap . fmap
+
+mapLefts :: (Functor f) => (a -> b) -> f (Either a c) -> f (Either b c)
+mapLefts f = fmap (swapEither . fmap f . swapEither)
 
 bindRights :: (Functor f) => (a -> Either c b) -> f (Either c a) -> f (Either c b)
 bindRights = fmap . (=<<)
@@ -44,16 +51,20 @@ groupRights (Right r : xs) =
 		(Right rs : gps) -> Right (r:rs) : gps
 		gps -> Right [r] : gps
 
+groupLefts :: [Either a b] -> [Either [a] b]
+groupLefts = map swapEither . groupRights . map swapEither
+
 ungroupRights :: [Either a [b]] -> [Either a b]
 ungroupRights = concat . map (either (\a -> [Left a]) (map Right))
 
-isShortLeft :: Either [a] b -> Bool
-isShortLeft (Left []) = True
-isShortLeft (Left [_]) = True
-isShortLeft _ = False
+isDelimiterLeft :: Either String b -> Bool
+isDelimiterLeft (Left "") = True
+isDelimiterLeft (Left " ") = True
+isDelimiterLeft (Left ",") = True
+isDelimiterLeft _ = False
 
-filterShortLefts :: [Either [a] b] -> [Either [a] b]
-filterShortLefts = filter (not . isShortLeft)
+filterDelimiterLefts :: [Either String b] -> [Either String b]
+filterDelimiterLefts = filter (not . isDelimiterLeft)
 
 -- utilities to get strings
 
@@ -226,6 +237,19 @@ fromBase64Codex :: String -> CodexList
 fromBase64Codex = ungroupRights . mapRights fromBase64 . tokensOf isBase64Char
 
 -- readers
+singleSpaces :: String -> String
+singleSpaces "  " = " "
+singleSpaces s = s
+
+doubleSpaces :: String -> String
+doubleSpaces " " = "  "
+doubleSpaces s = s
+
+mapLeftStringGroups :: (String -> String) -> [Either String a] -> [Either String a]
+mapLeftStringGroups f = mapLefts (f . concat) . groupLefts
+
+singleLeftSpaces = mapLeftStringGroups singleSpaces
+doubleLeftSpaces = mapLeftStringGroups doubleSpaces
 
 readEither :: String -> Either String Int
 readEither s = case readMaybe s of
@@ -234,17 +258,17 @@ readEither s = case readMaybe s of
 
 argReaderList :: M.Map String (Int -> String -> CodexList)
 argReaderList = M.fromList [
-	("bit", \arg -> filterShortLefts . fromRadixStream 2 arg),
-	("nybble", \arg -> filterShortLefts . fromRadixStream 16 arg),
-	("byte", \arg -> filterShortLefts . fromRadixStream 16 (2*arg))]
+	("bit", \arg -> filterDelimiterLefts . fromRadixStream 2 arg),
+	("nybble", \arg -> filterDelimiterLefts . fromRadixStream 16 arg),
+	("byte", \arg -> filterDelimiterLefts . fromRadixStream 16 (2*arg))]
 plainReaderList :: M.Map String (String -> CodexList)
 plainReaderList = M.fromList [
-	("bit", filterShortLefts . fromRadixStream 2 1),
-	("nybble", filterShortLefts . fromRadixStream 16 1),
-	("byte", filterShortLefts . fromRadixStream 16 2),
+	("bit", filterDelimiterLefts . fromRadixStream 2 1),
+	("nybble", filterDelimiterLefts . fromRadixStream 16 1),
+	("byte", filterDelimiterLefts . fromRadixStream 16 2),
 	("char", map (Right . ord)),
 	("alpha", fromAlphaStream),
-	("number", filterShortLefts . bindRights readEither . tokensOf isDigit),
+	("number", filterDelimiterLefts . bindRights readEither . tokensOf isDigit),
 	("base64", fromBase64Codex)
 	]
 
@@ -258,12 +282,12 @@ plainWriterList = M.fromList [
 	("bit", toRadixStream 2),
 	("nybble", toRadixStream 16),
 	("Nybble", toUpperRadixStream 16),
-	("byte", toRadixTokens 16 2),
-	("Byte", toUpperRadixTokens 16 2),
-	("char", mapRights chrString),
-	("alpha", toAlphaStream),
-	("Alpha", toUpperAlphaStream),
-	("number", mapRights (intercalate " " . map show) . groupRights),
+	("byte", doubleLeftSpaces . toRadixTokens 16 2),
+	("Byte", doubleLeftSpaces . toUpperRadixTokens 16 2),
+	("char", singleLeftSpaces . mapRights chrString),
+	("alpha", singleLeftSpaces . toAlphaStream),
+	("Alpha", singleLeftSpaces . toUpperAlphaStream),
+	("number", doubleLeftSpaces . mapRights (intercalate " " . map show) . groupRights),
 	("base64", toBase64Codex)
 	]
 
@@ -317,8 +341,39 @@ output :: CodexOutput -> String
 output = concat . map (either id id)
 
 codex :: [String] -> String -> String
+codex ["rot13"] = output . toAlphaStream . mapRights ((`mod1` 26) . (+13)) . fromAlphaStream
 codex args = let (rargs, wargs) = splitOn "to" args in
 	output . (extractWriter wargs) . (extractReader rargs)
+
+tests = TestList
+	[ "alpha to numbers" ~: "1 2 3 4 5 6 7 8 9 10" ~=? codexw "alpha to numbers" "abcdefghij"
+	, "alpha to numbers with spaces" ~: "17 21 9 3 11  2 18 15 23 14  6 15 24" ~=? codexw "alpha to numbers" "quick brown fox"
+	, "alpha to numbers with garbage" ~: "17 21 9 3 11 / 2 18 15 23 14 / 6 15 24" ~=? codexw "alpha to numbers" "quick / brown / fox"
+	, "alpha to numbers with more garbage" ~: "(6 15 15  2 1 18) (2 1 26  17 21 21 24)" ~=? codexw "alpha to numbers" "(foo bar) (baz quux)"
+	, "alpha to bytes with more garbage" ~: "(06 0f 0f  02 01 12) (02 01 1a  11 15 15 18)" ~=? codexw "alpha to bytes" "(foo bar) (baz quux)"
+	, "numbers to alpha" ~: "abcdefghij" ~=? codexw "numbers to alpha" "1 2 3 4 5 6 7 8 9 10"
+	, "numbers to Alpha" ~: "ABCDEFGHIJ" ~=? codexw "numbers to Alpha" "1 2 3 4 5 6 7 8 9 10"
+	, "numbers to alpha with spaces" ~: "(foo bar) (baz quux)" ~=? codexw "numbers to alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)"
+	, "chars to bytes" ~: "3a 2d 29" ~=? codexw "chars to bytes" ":-)"
+	, "chars to Bytes" ~: "3A 2D 29" ~=? codexw "chars to Bytes" ":-)"
+	, "bytes to chars" ~: ":-)" ~=? codexw "bytes to chars" "3a 2D 29"
+	, "bytes to chars with spaces" ~: ":-) :-(" ~=? codexw "bytes to chars" "3a 2D 29  3A 2d 28"
+	, "bytes to chars with garbage" ~: "[:-)]" ~=? codexw "bytes to chars" "[3a 2D 29]"
+	, "chars to numbers" ~: "58 45 41" ~=? codexw "chars to numbers" ":-)"
+	, "numbers to chars" ~: ":-)" ~=? codexw "numbers to chars" "58 45 41"
+	, "numbers to chars with spaces" ~: ":-) :-(" ~=? codexw "numbers to chars" "58 45 41  58 45 40"
+	, "8 bits to bytes" ~: "3a 2d 29" ~=? codexw "8 bits to bytes" "00111010 00101101 00101001"
+	, "8 bits to bytes continuous" ~: "3a 2d 29" ~=? codexw "8 bits to bytes" "001110100010110100101001"
+	, "8 bits to bytes with extra spaces" ~: "3a  2d  29" ~=? codexw "8 bits to bytes" "00111010  00101101  00101001"
+	, "to base 64" ~: "YW55IGNhcm5hbCBwbGVhc3VyZQ==" ~=? codexw "chars to base64" "any carnal pleasure"
+	, "from base 64" ~: "any carnal pleasure" ~=? codexw "base64 to chars" "YW55IGNhcm5hbCBwbGVhc3VyZQ=="
+	, "to base 64 weird" ~: "Pz4/Pj8+" ~=? codexw "chars to base64" "?>?>?>"
+	, "from base 64 weird" ~: "?>?>?>" ~=? codexw "base64 to chars" "Pz4/Pj8+"
+	, "rot13" ~: "nowhere" ~=? codexw "alpha rot13 to alpha" "abjurer"
+	, "shift 3" ~: "sulphur" ~=? codexw "alpha shift 3 to alpha" "primero"
+	, "rot13 shortcut" ~: "nowhere" ~=? codexw "rot13" "abjurer"
+	]
+	where codexw = codex . words
 
 main = do
 	args <- getArgs
