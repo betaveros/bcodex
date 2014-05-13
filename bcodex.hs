@@ -1,5 +1,6 @@
 #!/usr/bin/env runhaskell
 
+import Control.Applicative
 import Control.Arrow (second)
 import Data.Bits ((.&.), (.|.), shiftL, shiftR)
 import Data.Char (digitToInt, intToDigit, isHexDigit, isDigit, chr, ord, toUpper)
@@ -295,10 +296,11 @@ plainWriterList = M.fromList [
 unpluralize s = case last s of
 	's' -> Just $ init s
 	_   -> Nothing
-look m s em = head $ catMaybes [
-	M.lookup s m, (`M.lookup` m) =<< unpluralize s, error em
-	]
 
+look :: M.Map String v -> String -> String -> Either String v
+look m s em = case catMaybes [M.lookup s m, (`M.lookup` m) =<< unpluralize s] of
+	[] -> Left em
+	(x:_) -> Right x
 
 getPlainReader s = M.lookup s plainReaderList
 
@@ -313,22 +315,29 @@ splitArgument s@(h:_)
 	| isDigit h = Right (read $ takeWhile isDigit s, dropWhile isDigit s)
 	| otherwise = Left s
 
-parseModifier :: [ArgToken] -> CodexList -> CodexList
-parseModifier [] = id
-parseModifier [WordToken "plus", IntToken n] = mapRights (+n)
-parseModifier [WordToken "minus", IntToken n] = mapRights (subtract n)
-parseModifier [WordToken "shift", IntToken n] = mapRights ((`mod` 26) . (+n))
-parseModifier [WordToken "rot13"] = mapRights ((`mod1` 26) . (+13))
-parseModifier _ = error "Could not parse extra modifiers"
+parseModifier :: [ArgToken] -> Either String (CodexList -> CodexList)
+parseModifier [] = Right id
+parseModifier [WordToken "plus", IntToken n] = Right $ mapRights (+n)
+parseModifier [WordToken "minus", IntToken n] = Right $ mapRights (subtract n)
+parseModifier [WordToken "shift", IntToken n] = Right $ mapRights ((`mod` 26) . (+n))
+parseModifier [WordToken "rot13"] = Right $ mapRights ((`mod1` 26) . (+13))
+parseModifier _ = Left "Could not parse extra modifiers"
 
-parseReader :: [ArgToken] -> String -> CodexList
-parseReader ((WordToken s) : rs) = parseModifier rs . look plainReaderList s "No such reader without argument"
-parseReader ((IntToken n) : (WordToken s) : rs) = parseModifier rs . look argReaderList s "No such reader with argument" n
+parseReader :: [ArgToken] -> Either String (String -> CodexList)
+parseReader ((WordToken s) : rs) = do
+	rd <- look plainReaderList s "No such reader without argument"
+	mf <- parseModifier rs
+	return $ mf . rd
+parseReader ((IntToken n) : (WordToken s) : rs) = do
+	rd <- look argReaderList s "No such reader with argument"
+	mf <- parseModifier rs
+	return $ mf . rd n
+parseReader _ = Left "Could not parse reader"
 
-parseWriter :: [ArgToken] -> CodexList -> CodexOutput
+parseWriter :: [ArgToken] -> Either String (CodexList -> CodexOutput)
 parseWriter [WordToken s] = look plainWriterList s "No such writer without argument"
-parseWriter [IntToken n, WordToken s] = look argWriterList s "No such writer without argument" n
-parseWriter _ = error "Could not parse writer"
+parseWriter [IntToken n, WordToken s] = ($ n) <$> look argWriterList s "No such writer without argument"
+parseWriter _ = Left "Could not parse writer"
 
 
 splitOn x = (second tail) . span (/= x)
@@ -340,10 +349,12 @@ extractWriter = parseWriter . map readArgToken
 output :: CodexOutput -> String
 output = concat . map (either id id)
 
-codex :: [String] -> String -> String
-codex ["rot13"] = output . toAlphaStream . mapRights ((`mod1` 26) . (+13)) . fromAlphaStream
-codex args = let (rargs, wargs) = splitOn "to" args in
-	output . (extractWriter wargs) . (extractReader rargs)
+codex :: [String] -> Either String (String -> String)
+codex ["rot13"] = Right $ output . toAlphaStream . mapRights ((`mod1` 26) . (+13)) . fromAlphaStream
+codex args = let (rargs, wargs) = splitOn "to" args in do
+	rf <- extractReader rargs
+	wf <- extractWriter wargs
+	return $ output . wf . rf
 
 tests = TestList
 	[ "alpha to numbers" ~: "1 2 3 4 5 6 7 8 9 10" ~=? codexw "alpha to numbers" "abcdefghij"
@@ -373,8 +384,10 @@ tests = TestList
 	, "shift 3" ~: "sulphur" ~=? codexw "alpha shift 3 to alpha" "primero"
 	, "rot13 shortcut" ~: "nowhere" ~=? codexw "rot13" "abjurer"
 	]
-	where codexw = codex . words
+	where codexw = (\(Right x) -> x) . codex . words
 
 main = do
 	args <- getArgs
-	interact $ unlines . map (codex args) . lines
+	case codex args of
+		Left em -> error em
+		Right f -> interact $ unlines . map f . lines
