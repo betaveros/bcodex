@@ -319,7 +319,7 @@ parseModifier :: [ArgToken] -> Either String (CodexList -> CodexList)
 parseModifier [] = Right id
 parseModifier [WordToken "plus", IntToken n] = Right $ mapRights (+n)
 parseModifier [WordToken "minus", IntToken n] = Right $ mapRights (subtract n)
-parseModifier [WordToken "shift", IntToken n] = Right $ mapRights ((`mod` 26) . (+n))
+parseModifier [WordToken "shift", IntToken n] = Right $ mapRights ((`mod1` 26) . (+n))
 parseModifier [WordToken "rot13"] = Right $ mapRights ((`mod1` 26) . (+13))
 parseModifier _ = Left "Could not parse extra modifiers"
 
@@ -382,6 +382,7 @@ tests = TestList
 	, "from base 64 weird" ~: "?>?>?>" ~=? codexw "base64 to chars" "Pz4/Pj8+"
 	, "rot13" ~: "nowhere" ~=? codexw "alpha rot13 to alpha" "abjurer"
 	, "shift 3" ~: "sulphur" ~=? codexw "alpha shift 3 to alpha" "primero"
+	, "shift 23" ~: "xyzabc" ~=? codexw "alpha shift 23 to alpha" "abcdef"
 	, "rot13 shortcut" ~: "nowhere" ~=? codexw "rot13" "abjurer"
 	]
 	where codexw = (\(Right x) -> x) . codex . words
