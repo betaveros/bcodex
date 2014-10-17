@@ -317,10 +317,11 @@ splitArgument s@(h:_)
 
 parseModifier :: [ArgToken] -> Either String (CodexList -> CodexList)
 parseModifier [] = Right id
-parseModifier [WordToken "plus", IntToken n] = Right $ mapRights (+n)
-parseModifier [WordToken "minus", IntToken n] = Right $ mapRights (subtract n)
-parseModifier [WordToken "shift", IntToken n] = Right $ mapRights ((`mod1` 26) . (+n))
-parseModifier [WordToken "rot13"] = Right $ mapRights ((`mod1` 26) . (+13))
+parseModifier (WordToken "plus" : IntToken n : ts) = (. mapRights (+n)) <$> parseModifier ts
+parseModifier (WordToken "minus" : IntToken n : ts) = (. mapRights (subtract n)) <$> parseModifier ts
+parseModifier (WordToken "times" : IntToken n : ts) = (. mapRights (*n)) <$> parseModifier ts
+parseModifier (WordToken "shift" : IntToken n : ts) = (. mapRights ((`mod1` 26) . (+n))) <$> parseModifier ts
+parseModifier (WordToken "rot13" : ts) = (. mapRights ((`mod1` 26) . (+13))) <$> parseModifier ts
 parseModifier _ = Left "Could not parse extra modifiers"
 
 parseReader :: [ArgToken] -> Either String (String -> CodexList)
