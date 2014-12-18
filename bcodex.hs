@@ -1,18 +1,15 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE ViewPatterns #-}
 
-import Control.Applicative
-import Control.Arrow (second)
 import Control.Monad (void)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
 import Data.Char (digitToInt, intToDigit, isHexDigit, isDigit, chr, ord, toUpper)
 import Data.Function (on)
 import Data.List (unfoldr, groupBy)
-import Data.Maybe (catMaybes)
+import Data.Maybe (fromMaybe)
 import System.Environment (getArgs)
 import Text.Read (readMaybe)
 import Test.HUnit
-import qualified Data.Map as M (Map, fromList, lookup)
 
 -- A command-line utility for converting between "encodings".
 --
@@ -151,6 +148,12 @@ alphaToInt ch
     | 'A' <= ch && ch <= 'Z' = Right $ ord ch - ord '@'
     | otherwise              = Left [ch]
 
+mapUnderAlpha :: (Int -> Int) -> Char -> Char
+mapUnderAlpha f ch
+    | 'a' <= ch && ch <= 'z' = chr $ ord '`' + f (ord ch - ord '`') `mod1` 26
+    | 'A' <= ch && ch <= 'Z' = chr $ ord '@' + f (ord ch - ord '@') `mod1` 26
+    | otherwise              = ch
+
 intToAlpha :: Int -> CxElem Char
 intToAlpha n
     | 1 <= n && n <= 26 = Right $ chr (ord '`' + n)
@@ -265,59 +268,14 @@ wrapS2I f = Left $ \cxl -> concatMap ff cxl
     where ff (Right s) = f s
           ff (Left c) = [Left c]
 
-argStringCoderList :: M.Map String (Int -> CxCoder String)
-argStringCoderList = M.fromList [
-    ("bit",    \arg -> wrapS2I $ filterDelimiterLefts . fromRadixStream 2 arg),
-    ("nybble", \arg -> wrapS2I $ filterDelimiterLefts . fromRadixStream 16 arg),
-    ("byte",   \arg -> wrapS2I $ filterDelimiterLefts . fromRadixStream 16 (2*arg))]
-plainStringCoderList :: M.Map String (CxCoder String)
-plainStringCoderList = M.fromList [
-    ("bit",    wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1),
-    ("nybble", wrapS2I $ filterDelimiterLefts . fromRadixStream 16 1),
-    ("byte",   wrapS2I $ filterDelimiterLefts . fromRadixStream 16 2),
-    ("char",   wrapS2I $ map (Right . ord)),
-    ("alpha",  wrapS2I $ fromAlphaStream),
-    ("number", wrapS2I $ filterDelimiterLefts . bindRights readEither . tokensOf isDigit),
-    ("base64", wrapS2I $ fromBase64Codex)]
-
-argIntCoderList :: M.Map String (Int -> CxCoder Int)
-argIntCoderList = M.fromList [
-    ("bit",    Right . toRadixTokens 2),
-    ("nybble", Right . toRadixTokens 16),
-    ("byte",   Right . toRadixTokens 16 . (*2)) ]
-plainIntCoderList :: M.Map String (CxCoder Int)
-plainIntCoderList = M.fromList [
-    ("bit",    Right $ toRadixStream 2),
-    ("nybble", Right $ toRadixStream 16),
-    ("Nybble", Right $ toUpperRadixStream 16),
-    ("byte",   Right $ doubleLeftSpaces . toRadixTokens 16 2),
-    ("Byte",   Right $ doubleLeftSpaces . toUpperRadixTokens 16 2),
-    ("char",   Right $ singleLeftSpaces . mapRights chrString),
-    ("alpha",  Right $ singleLeftSpaces . toAlphaStream),
-    ("Alpha",  Right $ singleLeftSpaces . toUpperAlphaStream),
-    ("number", Right $ doubleLeftSpaces . mapRights (unwords . map show) . groupRights),
-    ("base64", Right $ toBase64Codex)
-    ]
 
 unpluralize :: String -> Maybe String
 unpluralize s = case last s of
     's' -> Just $ init s
     _   -> Nothing
 
-look :: M.Map String v -> String -> String -> Either String v
-look m s em = case catMaybes [M.lookup s m, (`M.lookup` m) =<< unpluralize s] of
-    [] -> Left em
-    (x:_) -> Right x
-
-parseModifier :: [ArgToken] -> Either String (CxList Int -> CxList Int)
-parseModifier [] = Right id
-parseModifier (WordToken "plus" : IntToken n : ts) = (. mapRights (+n)) <$> parseModifier ts
-parseModifier (WordToken "minus" : IntToken n : ts) = (. mapRights (subtract n)) <$> parseModifier ts
-parseModifier (WordToken "times" : IntToken n : ts) = (. mapRights (*n)) <$> parseModifier ts
-parseModifier (WordToken "shift" : IntToken n : ts) = (. mapRights ((`mod1` 26) . (+n))) <$> parseModifier ts
-parseModifier (WordToken "rot13" : ts) = (. mapRights ((`mod1` 26) . (+13))) <$> parseModifier ts
-parseModifier _ = Left "Could not parse extra modifiers"
-
+alphaStringCoder :: (Int -> Int) -> CxCoder String
+alphaStringCoder = Right . fmap . fmap . fmap . mapUnderAlpha
 
 rcompose :: (CxList a -> CxList b) -> CxCoder b -> CxCoder a
 rcompose f (Left f') = Left (f' . f)
@@ -326,19 +284,49 @@ rcompose f (Right f') = Right (f' . f)
 readInt :: String -> Maybe Int
 readInt = readMaybe
 
+unpl :: String -> String
+unpl s = fromMaybe s $ unpluralize s
+
+parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
+parseSingleStringCoder s = case s of
+    ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1,  rs)
+    ((unpl -> "nybble") : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 1, rs)
+    ((unpl -> "byte"  ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 2, rs)
+    ((unpl -> "char"  ) : rs) -> Right (wrapS2I $ map (Right . ord), rs)
+    (("alpha"         ) : rs) -> Right (wrapS2I   fromAlphaStream, rs)
+    ((unpl -> "number") : rs) -> Right (wrapS2I $ filterDelimiterLefts . bindRights readEither . tokensOf isDigit, rs)
+    (("base64"        ) : rs) -> Right (wrapS2I   fromBase64Codex, rs)
+    ((readInt -> Just n) : (unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 n, rs)
+    ((readInt -> Just n) : (unpl -> "nybble") : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 n, rs)
+    ((readInt -> Just n) : (unpl -> "byte"  ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 (2*n), rs)
+    ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
+    ("shift" : (readInt -> Just n) : rs) -> Right (alphaStringCoder (+n), rs)
+    _ -> Left "Could not parse string coder"
+
+parseSingleIntCoder :: [String] -> Either String (CxCoder Int, [String])
+parseSingleIntCoder s = case s of
+    ("to" : (unpl -> "bit"   ) : rs) -> Right (Right $ toRadixStream 2, rs)
+    ("to" : (unpl -> "nybble") : rs) -> Right (Right $ toRadixStream 16, rs)
+    ("to" : (unpl -> "Nybble") : rs) -> Right (Right $ toUpperRadixStream 16, rs)
+    ("to" : (unpl -> "byte"  ) : rs) -> Right (Right $ doubleLeftSpaces . toRadixTokens 16 2, rs)
+    ("to" : (unpl -> "Byte"  ) : rs) -> Right (Right $ doubleLeftSpaces . toUpperRadixTokens 16 2, rs)
+    ("to" : (unpl -> "char"  ) : rs) -> Right (Right $ singleLeftSpaces . mapRights chrString, rs)
+    ("to" : (unpl -> "alpha" ) : rs) -> Right (Right $ singleLeftSpaces . toAlphaStream, rs)
+    ("to" : (unpl -> "Alpha" ) : rs) -> Right (Right $ singleLeftSpaces . toUpperAlphaStream, rs)
+    ("to" : (unpl -> "number") : rs) -> Right (Right $ doubleLeftSpaces . mapRights (unwords . map show) . groupRights, rs)
+    ("to" : (unpl -> "base64") : rs) -> Right (Right   toBase64Codex, rs)
+    ("to" : (readInt -> Just n) : (unpl -> "bit"   ) : rs) -> Right (Right $ toRadixTokens 2 n, rs)
+    ("to" : (readInt -> Just n) : (unpl -> "nybble") : rs) -> Right (Right $ toRadixTokens 16 n, rs)
+    ("to" : (readInt -> Just n) : (unpl -> "byte"  ) : rs) -> Right (Right $ toRadixTokens 16 (2*n), rs)
+    ("plus"  : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (+ n), rs)
+    ("minus" : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ subtract n, rs)
+    ("times" : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (* n), rs)
+    _ -> Left "Could not parse int coder"
+
 parseStringCoder :: [String] -> Either String (CxCoder String)
 parseStringCoder [] = Right (Right id)
-parseStringCoder ((readInt -> Just n) : s : rs) = do
-    c <- look argStringCoderList s "No such string coder with argument"
-    case c n of
-        Left f -> do
-            c' <- parseIntCoder rs
-            return $ rcompose f c'
-        Right f -> do
-            c' <- parseStringCoder rs
-            return $ rcompose f c'
-parseStringCoder (s : rs) = do
-    c <- look plainStringCoderList s "No such string coder without argument"
+parseStringCoder s = do
+    (c, rs) <- parseSingleStringCoder s
     case c of
         Left f -> do
             c' <- parseIntCoder rs
@@ -349,18 +337,8 @@ parseStringCoder (s : rs) = do
 
 parseIntCoder :: [String] -> Either String (CxCoder Int)
 parseIntCoder [] = Right (Left id)
-parseIntCoder ("to" : rs) = parseIntCoder rs
-parseIntCoder ((readInt -> Just n) : s : rs) = do
-    c <- look argIntCoderList s "No such writer without argument"
-    case c n of
-        Left f -> do
-            c' <- parseIntCoder rs
-            return $ rcompose f c'
-        Right f -> do
-            c' <- parseStringCoder rs
-            return $ rcompose f c'
-parseIntCoder (s : rs) = do
-    c <- look plainIntCoderList s "No such int coder without argument"
+parseIntCoder s = do
+    (c, rs) <- parseSingleIntCoder s
     case c of
         Left f -> do
             c' <- parseIntCoder rs
