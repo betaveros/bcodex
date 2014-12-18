@@ -20,8 +20,8 @@ import qualified Data.Map as M (Map, fromList, lookup)
 -- bcodex.hs 8 bits to chars
 -- bcodex.hs
 
-type CodexList = [Either String Int]
-type CodexOutput = [Either String String]
+type CxElem a = Either String a
+type CxList a = [CxElem a]
 
 -- higher-order operations on Either
 swapEither :: Either a b -> Either b a
@@ -115,62 +115,62 @@ tokensOf p ls
 isRadixDigit :: Int -> Char -> Bool
 isRadixDigit radix ch = isHexDigit ch && (digitToInt ch < radix)
 
-fromRadixToken :: Int -> Int -> String -> CodexList
+fromRadixToken :: Int -> Int -> String -> CxList Int
 fromRadixToken radix blockSize s
     = map (\block -> if length block == blockSize
         then Right (fromBaseDigits radix $ map digitToInt block)
         else Left $ "[" ++ block ++ "]"
     ) $ splitInto blockSize s
 
-fromRadixStream :: Int -> Int -> String -> CodexList
+fromRadixStream :: Int -> Int -> String -> CxList Int
 fromRadixStream radix blockSize s
     = concatMap (either (\x -> [Left x]) (fromRadixToken radix blockSize)) $ tokensOf (isRadixDigit radix) s
 
-toRadixStream :: Int -> CodexList -> CodexOutput
+toRadixStream :: Int -> CxList Int -> CxList String
 toRadixStream radix
     = map (fmap intToDigitString . (asSingleBaseDigit radix =<<))
-toUpperRadixStream :: Int -> CodexList -> CodexOutput
+toUpperRadixStream :: Int -> CxList Int -> CxList String
 toUpperRadixStream radix = mapRights (map toUpper) . toRadixStream radix
 
 toRadixToken :: Int -> Int -> Int -> Either String String
 toRadixToken radix blockSize =
     fmap (map intToDigit) . asBaseDigitsSized radix blockSize
 
-toRadixTokens :: Int -> Int -> CodexList -> CodexOutput
+toRadixTokens :: Int -> Int -> CxList Int -> CxList String
 toRadixTokens radix blockSize
     = mapRights unwords . groupRights . bindRights (toRadixToken radix blockSize)
-toUpperRadixTokens :: Int -> Int -> CodexList -> CodexOutput
+toUpperRadixTokens :: Int -> Int -> CxList Int -> CxList String
 toUpperRadixTokens radix blockSize = mapRights (map toUpper) . toRadixTokens radix blockSize
 
 -- alpha
 
-alphaToInt :: Char -> Either String Int
+alphaToInt :: Char -> CxElem Int
 alphaToInt ch
     | 'a' <= ch && ch <= 'z' = Right $ ord ch - ord '`'
     | 'A' <= ch && ch <= 'Z' = Right $ ord ch - ord '@'
     | otherwise              = Left [ch]
 
-intToAlpha :: Int -> Either String Char
+intToAlpha :: Int -> CxElem Char
 intToAlpha n
     | 1 <= n && n <= 26 = Right $ chr (ord '`' + n)
     | otherwise         = Left $ "[" ++ show n ++ "]"
 
-intToAlphaString :: Int -> Either String String
+intToAlphaString :: Int -> CxElem String
 intToAlphaString = fmap str1 . intToAlpha
 
-intToUpperAlpha :: Int -> Either String Char
+intToUpperAlpha :: Int -> CxElem Char
 intToUpperAlpha = fmap toUpper . intToAlpha
 
-intToUpperAlphaString :: Int -> Either String String
+intToUpperAlphaString :: Int -> CxElem String
 intToUpperAlphaString = fmap str1 . intToUpperAlpha
 
-fromAlphaStream :: String -> CodexList
+fromAlphaStream :: String -> CxList Int
 fromAlphaStream = map alphaToInt
 
-toAlphaStream :: CodexList -> CodexOutput
+toAlphaStream :: CxList Int -> CxList String
 toAlphaStream = bindRights intToAlphaString
 
-toUpperAlphaStream :: CodexList -> CodexOutput
+toUpperAlphaStream :: CxList Int -> CxList String
 toUpperAlphaStream = bindRights intToUpperAlphaString
 
 -- base 64 stuff, copied from my matasano work
@@ -227,12 +227,12 @@ fromBase64 (c1:c2:c3:c4:cs) = bytes ++ fromBase64 cs
            | otherwise = toNBytes 3 $                 packChunks 6 $ map fromBase64Char [c4,c3,c2,c1]
 fromBase64 _ = error "base-64 has wrong number of characters"
 
-toBase64Codex :: CodexList -> CodexOutput
+toBase64Codex :: CxList Int -> CxList String
 toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
     where
         ensureBase64 x = if 0 <= x && x < 256 then Right x else Left $ show x
 
-fromBase64Codex :: String -> CodexList
+fromBase64Codex :: String -> CxList Int
 fromBase64Codex = ungroupRights . mapRights fromBase64 . tokensOf isBase64Char
 
 -- readers
@@ -257,39 +257,45 @@ readEither s = case readMaybe s of
     Just n  -> Right n
     Nothing -> Left s
 
-argReaderList :: M.Map String (Int -> String -> CodexList)
-argReaderList = M.fromList [
-    ("bit", \arg -> filterDelimiterLefts . fromRadixStream 2 arg),
-    ("nybble", \arg -> filterDelimiterLefts . fromRadixStream 16 arg),
-    ("byte", \arg -> filterDelimiterLefts . fromRadixStream 16 (2*arg))]
-plainReaderList :: M.Map String (String -> CodexList)
-plainReaderList = M.fromList [
-    ("bit", filterDelimiterLefts . fromRadixStream 2 1),
-    ("nybble", filterDelimiterLefts . fromRadixStream 16 1),
-    ("byte", filterDelimiterLefts . fromRadixStream 16 2),
-    ("char", map (Right . ord)),
-    ("alpha", fromAlphaStream),
-    ("number", filterDelimiterLefts . bindRights readEither . tokensOf isDigit),
-    ("base64", fromBase64Codex)
-    ]
+type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList String)
 
-argWriterList :: M.Map String (Int -> CodexList -> CodexOutput)
-argWriterList = M.fromList [
-    ("bit", toRadixTokens 2),
-    ("nybble", toRadixTokens 16),
-    ("byte", toRadixTokens 16 . (*2)) ]
-plainWriterList :: M.Map String (CodexList -> CodexOutput)
-plainWriterList = M.fromList [
-    ("bit", toRadixStream 2),
-    ("nybble", toRadixStream 16),
-    ("Nybble", toUpperRadixStream 16),
-    ("byte", doubleLeftSpaces . toRadixTokens 16 2),
-    ("Byte", doubleLeftSpaces . toUpperRadixTokens 16 2),
-    ("char", singleLeftSpaces . mapRights chrString),
-    ("alpha", singleLeftSpaces . toAlphaStream),
-    ("Alpha", singleLeftSpaces . toUpperAlphaStream),
-    ("number", doubleLeftSpaces . mapRights (unwords . map show) . groupRights),
-    ("base64", toBase64Codex)
+wrapS2I :: (String -> CxList Int) -> CxCoder String
+wrapS2I f = Left $ \cxl -> concatMap ff cxl
+    where ff (Right s) = f s
+          ff (Left c) = [Left c]
+
+argStringCoderList :: M.Map String (Int -> CxCoder String)
+argStringCoderList = M.fromList [
+    ("bit",    \arg -> wrapS2I $ filterDelimiterLefts . fromRadixStream 2 arg),
+    ("nybble", \arg -> wrapS2I $ filterDelimiterLefts . fromRadixStream 16 arg),
+    ("byte",   \arg -> wrapS2I $ filterDelimiterLefts . fromRadixStream 16 (2*arg))]
+plainStringCoderList :: M.Map String (CxCoder String)
+plainStringCoderList = M.fromList [
+    ("bit",    wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1),
+    ("nybble", wrapS2I $ filterDelimiterLefts . fromRadixStream 16 1),
+    ("byte",   wrapS2I $ filterDelimiterLefts . fromRadixStream 16 2),
+    ("char",   wrapS2I $ map (Right . ord)),
+    ("alpha",  wrapS2I $ fromAlphaStream),
+    ("number", wrapS2I $ filterDelimiterLefts . bindRights readEither . tokensOf isDigit),
+    ("base64", wrapS2I $ fromBase64Codex)]
+
+argIntCoderList :: M.Map String (Int -> CxCoder Int)
+argIntCoderList = M.fromList [
+    ("bit",    Right . toRadixTokens 2),
+    ("nybble", Right . toRadixTokens 16),
+    ("byte",   Right . toRadixTokens 16 . (*2)) ]
+plainIntCoderList :: M.Map String (CxCoder Int)
+plainIntCoderList = M.fromList [
+    ("bit",    Right $ toRadixStream 2),
+    ("nybble", Right $ toRadixStream 16),
+    ("Nybble", Right $ toUpperRadixStream 16),
+    ("byte",   Right $ doubleLeftSpaces . toRadixTokens 16 2),
+    ("Byte",   Right $ doubleLeftSpaces . toUpperRadixTokens 16 2),
+    ("char",   Right $ singleLeftSpaces . mapRights chrString),
+    ("alpha",  Right $ singleLeftSpaces . toAlphaStream),
+    ("Alpha",  Right $ singleLeftSpaces . toUpperAlphaStream),
+    ("number", Right $ doubleLeftSpaces . mapRights (unwords . map show) . groupRights),
+    ("base64", Right $ toBase64Codex)
     ]
 
 unpluralize :: String -> Maybe String
@@ -307,7 +313,7 @@ data ArgToken = IntToken Int | WordToken String deriving (Eq, Show)
 readArgToken :: String -> ArgToken
 readArgToken str = maybe (WordToken str) IntToken (readMaybe str :: Maybe Int)
 
-parseModifier :: [ArgToken] -> Either String (CodexList -> CodexList)
+parseModifier :: [ArgToken] -> Either String (CxList Int -> CxList Int)
 parseModifier [] = Right id
 parseModifier (WordToken "plus" : IntToken n : ts) = (. mapRights (+n)) <$> parseModifier ts
 parseModifier (WordToken "minus" : IntToken n : ts) = (. mapRights (subtract n)) <$> parseModifier ts
@@ -316,40 +322,64 @@ parseModifier (WordToken "shift" : IntToken n : ts) = (. mapRights ((`mod1` 26) 
 parseModifier (WordToken "rot13" : ts) = (. mapRights ((`mod1` 26) . (+13))) <$> parseModifier ts
 parseModifier _ = Left "Could not parse extra modifiers"
 
-parseReader :: [ArgToken] -> Either String (String -> CodexList)
-parseReader (WordToken s : rs) = do
-    rd <- look plainReaderList s "No such reader without argument"
-    mf <- parseModifier rs
-    return $ mf . rd
-parseReader (IntToken n : WordToken s : rs) = do
-    rd <- look argReaderList s "No such reader with argument"
-    mf <- parseModifier rs
-    return $ mf . rd n
-parseReader _ = Left "Could not parse reader"
 
-parseWriter :: [ArgToken] -> Either String (CodexList -> CodexOutput)
-parseWriter [WordToken s] = look plainWriterList s "No such writer without argument"
-parseWriter [IntToken n, WordToken s] = ($ n) <$> look argWriterList s "No such writer without argument"
-parseWriter _ = Left "Could not parse writer"
+rcompose :: (CxList a -> CxList b) -> CxCoder b -> CxCoder a
+rcompose f (Left f') = Left (f' . f)
+rcompose f (Right f') = Right (f' . f)
 
-splitOn :: Eq a => a -> [a] -> ([a],[a])
-splitOn x = second tail . span (/= x)
+parseStringCoder :: [ArgToken] -> Either String (CxCoder String)
+parseStringCoder [] = Right (Right id)
+parseStringCoder (WordToken s : rs) = do
+    c <- look plainStringCoderList s "No such string coder without argument"
+    case c of
+        Left f -> do
+            c' <- parseIntCoder rs
+            return $ rcompose f c'
+        Right f -> do
+            c' <- parseStringCoder rs
+            return $ rcompose f c'
+parseStringCoder (IntToken n : WordToken s : rs) = do
+    c <- look argStringCoderList s "No such string coder with argument"
+    case c n of
+        Left f -> do
+            c' <- parseIntCoder rs
+            return $ rcompose f c'
+        Right f -> do
+            c' <- parseStringCoder rs
+            return $ rcompose f c'
+parseStringCoder _ = Left "Could not parse string coder"
 
-extractReader :: [String] -> Either String (String -> CodexList)
-extractReader = parseReader . map readArgToken
+parseIntCoder :: [ArgToken] -> Either String (CxCoder Int)
+parseIntCoder [] = Right (Left id)
+parseIntCoder (WordToken s : rs) = do
+    c <- look plainIntCoderList s "No such int coder without argument"
+    case c of
+        Left f -> do
+            c' <- parseIntCoder rs
+            return $ rcompose f c'
+        Right f -> do
+            c' <- parseStringCoder rs
+            return $ rcompose f c'
+parseIntCoder (IntToken n : WordToken s : rs) = do
+    c <- look argIntCoderList s "No such writer without argument"
+    case c n of
+        Left f -> do
+            c' <- parseIntCoder rs
+            return $ rcompose f c'
+        Right f -> do
+            c' <- parseStringCoder rs
+            return $ rcompose f c'
 
-extractWriter :: [String] -> Either String (CodexList -> CodexOutput)
-extractWriter = parseWriter . map readArgToken
-
-output :: CodexOutput -> String
-output = concatMap (either id id)
+applyCxCoder :: CxCoder a -> a -> String
+applyCxCoder c = case c of
+    Left f -> concatMap (either id show) . f . (:[]) . Right
+    Right f -> concatMap (either id id)  . f . (:[]) . Right
 
 codex :: [String] -> Either String (String -> String)
-codex ["rot13"] = Right $ output . toAlphaStream . mapRights ((`mod1` 26) . (+13)) . fromAlphaStream
-codex args = let (rargs, wargs) = splitOn "to" args in do
-    rf <- extractReader rargs
-    wf <- extractWriter wargs
-    return $ output . wf . rf
+-- codex ["rot13"] = Right $ output . toAlphaStream . mapRights ((`mod1` 26) . (+13)) . fromAlphaStream
+codex args = do
+    sf <- parseStringCoder (map readArgToken args)
+    return $ applyCxCoder sf
 
 tests :: Test
 tests = TestList
