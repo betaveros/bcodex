@@ -1,4 +1,5 @@
 #!/usr/bin/env runhaskell
+{-# LANGUAGE ViewPatterns #-}
 
 import Control.Applicative
 import Control.Arrow (second)
@@ -308,11 +309,6 @@ look m s em = case catMaybes [M.lookup s m, (`M.lookup` m) =<< unpluralize s] of
     [] -> Left em
     (x:_) -> Right x
 
-data ArgToken = IntToken Int | WordToken String deriving (Eq, Show)
-
-readArgToken :: String -> ArgToken
-readArgToken str = maybe (WordToken str) IntToken (readMaybe str :: Maybe Int)
-
 parseModifier :: [ArgToken] -> Either String (CxList Int -> CxList Int)
 parseModifier [] = Right id
 parseModifier (WordToken "plus" : IntToken n : ts) = (. mapRights (+n)) <$> parseModifier ts
@@ -327,18 +323,12 @@ rcompose :: (CxList a -> CxList b) -> CxCoder b -> CxCoder a
 rcompose f (Left f') = Left (f' . f)
 rcompose f (Right f') = Right (f' . f)
 
-parseStringCoder :: [ArgToken] -> Either String (CxCoder String)
+readInt :: String -> Maybe Int
+readInt = readMaybe
+
+parseStringCoder :: [String] -> Either String (CxCoder String)
 parseStringCoder [] = Right (Right id)
-parseStringCoder (WordToken s : rs) = do
-    c <- look plainStringCoderList s "No such string coder without argument"
-    case c of
-        Left f -> do
-            c' <- parseIntCoder rs
-            return $ rcompose f c'
-        Right f -> do
-            c' <- parseStringCoder rs
-            return $ rcompose f c'
-parseStringCoder (IntToken n : WordToken s : rs) = do
+parseStringCoder ((readInt -> Just n) : s : rs) = do
     c <- look argStringCoderList s "No such string coder with argument"
     case c n of
         Left f -> do
@@ -347,12 +337,8 @@ parseStringCoder (IntToken n : WordToken s : rs) = do
         Right f -> do
             c' <- parseStringCoder rs
             return $ rcompose f c'
-parseStringCoder _ = Left "Could not parse string coder"
-
-parseIntCoder :: [ArgToken] -> Either String (CxCoder Int)
-parseIntCoder [] = Right (Left id)
-parseIntCoder (WordToken s : rs) = do
-    c <- look plainIntCoderList s "No such int coder without argument"
+parseStringCoder (s : rs) = do
+    c <- look plainStringCoderList s "No such string coder without argument"
     case c of
         Left f -> do
             c' <- parseIntCoder rs
@@ -360,9 +346,22 @@ parseIntCoder (WordToken s : rs) = do
         Right f -> do
             c' <- parseStringCoder rs
             return $ rcompose f c'
-parseIntCoder (IntToken n : WordToken s : rs) = do
+
+parseIntCoder :: [String] -> Either String (CxCoder Int)
+parseIntCoder [] = Right (Left id)
+parseIntCoder ("to" : rs) = parseIntCoder rs
+parseIntCoder ((readInt -> Just n) : s : rs) = do
     c <- look argIntCoderList s "No such writer without argument"
     case c n of
+        Left f -> do
+            c' <- parseIntCoder rs
+            return $ rcompose f c'
+        Right f -> do
+            c' <- parseStringCoder rs
+            return $ rcompose f c'
+parseIntCoder (s : rs) = do
+    c <- look plainIntCoderList s "No such int coder without argument"
+    case c of
         Left f -> do
             c' <- parseIntCoder rs
             return $ rcompose f c'
@@ -378,7 +377,7 @@ applyCxCoder c = case c of
 codex :: [String] -> Either String (String -> String)
 -- codex ["rot13"] = Right $ output . toAlphaStream . mapRights ((`mod1` 26) . (+13)) . fromAlphaStream
 codex args = do
-    sf <- parseStringCoder (map readArgToken args)
+    sf <- parseStringCoder args
     return $ applyCxCoder sf
 
 tests :: Test
