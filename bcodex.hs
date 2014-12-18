@@ -3,7 +3,7 @@
 
 import Control.Monad (void)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
-import Data.Char (digitToInt, intToDigit, isHexDigit, isDigit, chr, ord, toUpper)
+import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isDigit, isLetter, isSpace, chr, ord, toUpper)
 import Data.Function (on)
 import Data.List (unfoldr, groupBy)
 import Data.Maybe (fromMaybe)
@@ -63,6 +63,11 @@ isDelimiterLeft _ = False
 
 filterDelimiterLefts :: [Either String b] -> [Either String b]
 filterDelimiterLefts = filter (not . isDelimiterLeft)
+
+mapAllStrings :: (String -> String) -> CxList String -> CxList String
+mapAllStrings f = map f'
+    where f' (Left  s) = Left  (f s)
+          f' (Right s) = Right (f s)
 
 -- utilities to get strings
 
@@ -287,6 +292,16 @@ readInt = readMaybe
 unpl :: String -> String
 unpl s = fromMaybe s $ unpluralize s
 
+parseCharClass :: String -> Maybe (Char -> Bool)
+parseCharClass s = case s of
+    "space"      -> Just isSpace
+    "spaces"     -> Just isSpace
+    "whitespace" -> Just isSpace
+    "alpha"      -> Just isAlpha
+    "letter"     -> Just isLetter
+    "letters"    -> Just isLetter
+    _ -> Nothing
+
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = case s of
     ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1,  rs)
@@ -301,6 +316,8 @@ parseSingleStringCoder s = case s of
     ((readInt -> Just n) : (unpl -> "byte"  ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 (2*n), rs)
     ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
     ("shift" : (readInt -> Just n) : rs) -> Right (alphaStringCoder (+n), rs)
+    ("strip" : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (not . p), rs)
+    ("only"  : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter p, rs)
     _ -> Left "Could not parse string coder"
 
 parseSingleIntCoder :: [String] -> Either String (CxCoder Int, [String])
