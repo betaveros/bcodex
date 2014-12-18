@@ -361,8 +361,10 @@ tests = TestList
     , "numbers to alpha" ~: "abcdefghij" ~=? codexw "numbers to alpha" "1 2 3 4 5 6 7 8 9 10"
     , "numbers to Alpha" ~: "ABCDEFGHIJ" ~=? codexw "numbers to Alpha" "1 2 3 4 5 6 7 8 9 10"
     , "numbers to alpha with spaces" ~: "(foo bar) (baz quux)" ~=? codexw "numbers to alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)"
+    , "numbers to alpha only alpha" ~: "foobarbazquux" ~=? codexw "numbers to alpha only alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)"
     , "chars to bytes" ~: "3a 2d 29" ~=? codexw "chars to bytes" ":-)"
     , "chars to Bytes" ~: "3A 2D 29" ~=? codexw "chars to Bytes" ":-)"
+    , "chars to Bytes strip spaces" ~: "3A2D29" ~=? codexw "chars to Bytes strip spaces" ":-)"
     , "bytes to chars" ~: ":-)" ~=? codexw "bytes to chars" "3a 2D 29"
     , "bytes to chars with spaces" ~: ":-) :-(" ~=? codexw "bytes to chars" "3a 2D 29  3A 2d 28"
     , "bytes to chars with garbage" ~: "[:-)]" ~=? codexw "bytes to chars" "[3a 2D 29]"
@@ -371,17 +373,17 @@ tests = TestList
     , "numbers to chars with spaces" ~: ":-) :-(" ~=? codexw "numbers to chars" "58 45 41  58 45 40"
     , "8 bits to bytes" ~: "3a 2d 29" ~=? codexw "8 bits to bytes" "00111010 00101101 00101001"
     , "8 bits to bytes continuous" ~: "3a 2d 29" ~=? codexw "8 bits to bytes" "001110100010110100101001"
+    , "8 bits to bytes strip spaces" ~: "3a2d29" ~=? codexw "8 bits to bytes strip spaces" "001110100010110100101001"
     , "8 bits to bytes with extra spaces" ~: "3a  2d  29" ~=? codexw "8 bits to bytes" "00111010  00101101  00101001"
     , "to base 64" ~: "YW55IGNhcm5hbCBwbGVhc3VyZQ==" ~=? codexw "chars to base64" "any carnal pleasure"
     , "from base 64" ~: "any carnal pleasure" ~=? codexw "base64 to chars" "YW55IGNhcm5hbCBwbGVhc3VyZQ=="
     , "to base 64 weird" ~: "Pz4/Pj8+" ~=? codexw "chars to base64" "?>?>?>"
     , "from base 64 weird" ~: "?>?>?>" ~=? codexw "base64 to chars" "Pz4/Pj8+"
-    , "rot13" ~: "nowhere" ~=? codexw "alpha rot13 to alpha" "abjurer"
-    , "shift 3" ~: "sulphur" ~=? codexw "alpha shift 3 to alpha" "primero"
-    , "shift 23" ~: "xyzabc" ~=? codexw "alpha shift 23 to alpha" "abcdef"
-    , "rot13 shortcut" ~: "nowhere" ~=? codexw "rot13" "abjurer"
+    , "shift 3" ~: "sulphur" ~=? codexw "shift 3" "primero"
+    , "shift 23" ~: "xYzaBc" ~=? codexw "shift 23" "aBcdEf"
+    , "rot13" ~: "nowhere AbJuReR" ~=? codexw "rot13" "abjurer NoWhErE"
     ]
-    where codexw = (\(Right x) -> x) . codex . words
+    where codexw = either error id . codex . words
 
 main :: IO ()
 main = do
