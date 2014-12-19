@@ -18,10 +18,11 @@ import Test.HUnit
 -- bcodex.hs 8 bits to chars
 -- bcodex.hs
 
-data CxError = CxBadString String
+data CxError = CxBadString String | CxBadInt Int
 
 showCxError :: CxError -> String
 showCxError (CxBadString s) = s
+showCxError (CxBadInt n) = "[" ++ show n ++ "]"
 
 type CxElem a = Either CxError a
 type CxList a = [CxElem a]
@@ -41,6 +42,7 @@ mapBadStrings :: (Functor f) => (String -> String) -> f (CxElem c) -> f (CxElem 
 mapBadStrings f = fmap f'
     where f' (Right r) = Right r
           f' (Left (CxBadString s)) = Left (CxBadString (f s))
+          f' (Left (CxBadInt i)) = Left (CxBadInt i)
 
 bindRights :: (Functor f) => (a -> Either c b) -> f (Either c a) -> f (Either c b)
 bindRights = fmap . (=<<)
@@ -61,11 +63,11 @@ groupRights (Right r : xs) =
 
 concatBadStrings :: CxList a -> CxList a
 concatBadStrings [] = []
-concatBadStrings (Right r : xs) = Right r : concatBadStrings xs
 concatBadStrings (Left (CxBadString r) : xs) =
     case concatBadStrings xs of
         (Left (CxBadString r') : bss) -> Left (CxBadString (r ++ r')) : bss
         bss -> Left (CxBadString r) : bss
+concatBadStrings (x : xs) = x : concatBadStrings xs
 
 ungroupRights :: [Either a [b]] -> [Either a b]
 ungroupRights = concatMap (either (\a -> [Left a]) (map Right))
@@ -83,6 +85,7 @@ mapAllStrings :: (String -> String) -> CxList String -> CxList String
 mapAllStrings f = map f'
     where f' (Left  (CxBadString s)) = Left (CxBadString (f s))
           f' (Right s) = Right (f s)
+          f' x = x
 
 -- utilities to get strings
 
@@ -114,7 +117,7 @@ asBaseDigitsSized :: Int -> Int -> Int -> CxElem [Int]
 asBaseDigitsSized base size num =
     case f base size num of
         Just xs -> Right $ reverse xs
-        Nothing -> Left . CxBadString $ "[" ++ show num ++ "]"
+        Nothing -> Left . CxBadInt $ num
     where
         f b sz n
             | sz == 0   = if n == 0 then Just [] else Nothing
@@ -124,7 +127,7 @@ asBaseDigitsSized base size num =
 asSingleBaseDigit :: Int -> Int -> CxElem Int
 asSingleBaseDigit base num
     | 0 <= num && num < base = Right num
-    | otherwise = Left . CxBadString $ "[" ++ show num ++ "]"
+    | otherwise = Left . CxBadInt $ num
 
 tokensOf :: (a -> Bool) -> [a] -> [Either [a] [a]]
 tokensOf p ls
@@ -177,7 +180,7 @@ mapUnderAlpha f ch
 intToAlpha :: Int -> CxElem Char
 intToAlpha n
     | 1 <= n && n <= 26 = Right $ chr (ord '`' + n)
-    | otherwise         = Left . CxBadString $ "[" ++ show n ++ "]"
+    | otherwise         = Left . CxBadInt $ n
 
 intToAlphaString :: Int -> CxElem String
 intToAlphaString = fmap str1 . intToAlpha
@@ -254,7 +257,7 @@ fromBase64 _ = error "base-64 has wrong number of characters"
 toBase64Codex :: CxList Int -> CxList String
 toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
     where
-        ensureBase64 x = if 0 <= x && x < 256 then Right x else Left . CxBadString $ show x
+        ensureBase64 x = if 0 <= x && x < 256 then Right x else Left . CxBadInt $ x
 
 fromBase64Codex :: String -> CxList Int
 fromBase64Codex = mapLefts CxBadString . ungroupRights . mapRights fromBase64 . tokensOf isBase64Char
