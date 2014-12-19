@@ -18,13 +18,14 @@ import Test.HUnit
 -- bcodex.hs 8 bits to chars
 -- bcodex.hs
 
-data CxError = CxBadString String | CxBadInt Int
+data CxLeft = CxBadString String | CxExtra String | CxBadInt Int
 
-showCxError :: CxError -> String
-showCxError (CxBadString s) = s
-showCxError (CxBadInt n) = "[" ++ show n ++ "]"
+showCxLeft :: CxLeft -> String
+showCxLeft (CxBadString s) = "{" ++ s ++ "}"
+showCxLeft (CxExtra s) = s
+showCxLeft (CxBadInt n) = "[" ++ show n ++ "]"
 
-type CxElem a = Either CxError a
+type CxElem a = Either CxLeft a
 type CxList a = [CxElem a]
 
 -- higher-order operations on Either
@@ -42,6 +43,7 @@ mapBadStrings :: (Functor f) => (String -> String) -> f (CxElem c) -> f (CxElem 
 mapBadStrings f = fmap f'
     where f' (Right r) = Right r
           f' (Left (CxBadString s)) = Left (CxBadString (f s))
+          f' (Left (CxExtra     s)) = Left (CxExtra     (f s))
           f' (Left (CxBadInt i)) = Left (CxBadInt i)
 
 bindRights :: (Functor f) => (a -> Either c b) -> f (Either c a) -> f (Either c b)
@@ -61,29 +63,30 @@ groupRights (Right r : xs) =
         (Right rs : gps) -> Right (r:rs) : gps
         gps -> Right [r] : gps
 
-concatBadStrings :: CxList a -> CxList a
-concatBadStrings [] = []
-concatBadStrings (Left (CxBadString r) : xs) =
-    case concatBadStrings xs of
-        (Left (CxBadString r') : bss) -> Left (CxBadString (r ++ r')) : bss
-        bss -> Left (CxBadString r) : bss
-concatBadStrings (x : xs) = x : concatBadStrings xs
+concatExtraStrings :: CxList a -> CxList a
+concatExtraStrings [] = []
+concatExtraStrings (Left (CxExtra r) : xs) =
+    case concatExtraStrings xs of
+        (Left (CxExtra r') : bss) -> Left (CxExtra (r ++ r')) : bss
+        bss -> Left (CxExtra r) : bss
+concatExtraStrings (x : xs) = x : concatExtraStrings xs
 
 ungroupRights :: [Either a [b]] -> [Either a b]
 ungroupRights = concatMap (either (\a -> [Left a]) (map Right))
 
-isDelimiterLeft :: CxElem b -> Bool
-isDelimiterLeft (Left (CxBadString "" )) = True
-isDelimiterLeft (Left (CxBadString " ")) = True
-isDelimiterLeft (Left (CxBadString ",")) = True
-isDelimiterLeft _ = False
+isDelimiterExtra :: CxElem b -> Bool
+isDelimiterExtra (Left (CxExtra "" )) = True
+isDelimiterExtra (Left (CxExtra " ")) = True
+isDelimiterExtra (Left (CxExtra ",")) = True
+isDelimiterExtra _ = False
 
 filterDelimiterLefts :: CxList b -> CxList b
-filterDelimiterLefts = filter (not . isDelimiterLeft)
+filterDelimiterLefts = filter (not . isDelimiterExtra)
 
 mapAllStrings :: (String -> String) -> CxList String -> CxList String
 mapAllStrings f = map f'
     where f' (Left  (CxBadString s)) = Left (CxBadString (f s))
+          f' (Left  (CxExtra     s)) = Left (CxExtra     (f s))
           f' (Right s) = Right (f s)
           f' x = x
 
@@ -140,12 +143,12 @@ fromRadixToken :: Int -> Int -> String -> CxList Int
 fromRadixToken radix blockSize s
     = map (\block -> if length block == blockSize
         then Right (fromBaseDigits radix $ map digitToInt block)
-        else Left . CxBadString $ "[" ++ block ++ "]"
+        else Left . CxBadString $ block
     ) $ splitInto blockSize s
 
 fromRadixStream :: Int -> Int -> String -> CxList Int
 fromRadixStream radix blockSize s
-    = concatMap (either (\x -> [Left (CxBadString x)]) (fromRadixToken radix blockSize)) $ tokensOf (isRadixDigit radix) s
+    = concatMap (either (\x -> [Left (CxExtra x)]) (fromRadixToken radix blockSize)) $ tokensOf (isRadixDigit radix) s
 
 toRadixStream :: Int -> CxList Int -> CxList String
 toRadixStream radix
@@ -169,7 +172,7 @@ alphaToInt :: Char -> CxElem Int
 alphaToInt ch
     | 'a' <= ch && ch <= 'z' = Right $ ord ch - ord '`'
     | 'A' <= ch && ch <= 'Z' = Right $ ord ch - ord '@'
-    | otherwise              = Left . CxBadString $ [ch]
+    | otherwise              = Left . CxExtra $ [ch]
 
 mapUnderAlpha :: (Int -> Int) -> Char -> Char
 mapUnderAlpha f ch
@@ -271,13 +274,13 @@ doubleSpaces :: String -> String
 doubleSpaces " " = "  "
 doubleSpaces s = s
 
-mapBadStringGroups :: (String -> String) -> CxList a -> CxList a
-mapBadStringGroups f = mapBadStrings f . concatBadStrings
+mapExtraStringGroups :: (String -> String) -> CxList a -> CxList a
+mapExtraStringGroups f = mapBadStrings f . concatExtraStrings
 
 singleLeftSpaces :: CxList a -> CxList a
-singleLeftSpaces = mapBadStringGroups singleSpaces
+singleLeftSpaces = mapExtraStringGroups singleSpaces
 doubleLeftSpaces :: CxList a -> CxList a
-doubleLeftSpaces = mapBadStringGroups doubleSpaces
+doubleLeftSpaces = mapExtraStringGroups doubleSpaces
 
 readEither :: String -> Either String Int
 readEither s = case readMaybe s of
@@ -327,7 +330,7 @@ parseSingleStringCoder s = case s of
     ((unpl -> "byte"  ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 2, rs)
     ((unpl -> "char"  ) : rs) -> Right (wrapS2I $ map (Right . ord), rs)
     (("alpha"         ) : rs) -> Right (wrapS2I   fromAlphaStream, rs)
-    ((unpl -> "number") : rs) -> Right (wrapS2I $ filterDelimiterLefts . mapLefts CxBadString . bindRights readEither . tokensOf isDigit, rs)
+    ((unpl -> "number") : rs) -> Right (wrapS2I $ filterDelimiterLefts . mapLefts CxExtra . bindRights readEither . tokensOf isDigit, rs)
     (("base64"        ) : rs) -> Right (wrapS2I   fromBase64Codex, rs)
     ((readInt -> Just n) : (unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 n, rs)
     ((readInt -> Just n) : (unpl -> "nybble") : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 n, rs)
@@ -384,8 +387,8 @@ parseIntCoder s = do
 
 applyCxCoder :: CxCoder a -> a -> String
 applyCxCoder c = case c of
-    Left f ->  concatMap (either showCxError show) . f . (:[]) . Right
-    Right f -> concatMap (either showCxError id)  . f . (:[]) . Right
+    Left f ->  concatMap (either showCxLeft show) . f . (:[]) . Right
+    Right f -> concatMap (either showCxLeft id)  . f . (:[]) . Right
 
 codex :: [String] -> Either String (String -> String)
 -- codex ["rot13"] = Right $ output . toAlphaStream . mapRights ((`mod1` 26) . (+13)) . fromAlphaStream
