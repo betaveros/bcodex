@@ -20,7 +20,7 @@ import Test.HUnit
 -- bcodex.hs 8 bits to chars
 -- bcodex.hs
 
-data CxLeft = CxBadString String | CxExtra String | CxBadInt Int
+data CxLeft = CxBadString String | CxExtra String | CxBadInt Int deriving (Eq, Ord, Show)
 
 showCxLeft :: CxLeft -> String
 showCxLeft (CxBadString s) = "{" ++ s ++ "}"
@@ -281,6 +281,15 @@ morseTable = [ ('a', ".-"), ('b', "-..."), ('c', "-.-."), ('d', "-.."), ('e', ".
 toMorseMap :: Map.Map Char String
 toMorseMap = Map.fromList morseTable
 
+toMorse :: Char -> CxElem String
+toMorse ' ' = Left $ CxExtra " / "
+toMorse c = case Map.lookup c toMorseMap of
+    Just s -> Right s
+    Nothing -> Left $ CxExtra [c]
+
+toMorseCodex :: CxList String -> CxList String
+toMorseCodex = mapRights unwords . groupRights . bindRights toMorse . ungroupRights
+
 fromMorseMap :: Map.Map String Char
 fromMorseMap = Map.fromList $ map swap morseTable
 
@@ -369,6 +378,7 @@ parseSingleStringCoder s = case s of
     ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
     ("shift" : (readInt -> Just n) : rs) -> Right (alphaStringCoder (+n), rs)
     ("morse" : rs) -> Right (wrapS2S fromMorseCodex, rs)
+    ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
     ("strip" : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (not . p), rs)
     ("only"  : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter p, rs)
     _ -> Left "Could not parse string coder"
@@ -460,7 +470,7 @@ tests = TestList
     , "shift 23" ~: "xYzaBc" ~=? codexw "shift 23" "aBcdEf"
     , "rot13" ~: "nowhere AbJuReR" ~=? codexw "rot13" "abjurer NoWhErE"
     , "from morse code" ~: "foo bar abcdefghijklmnopqrstuvwxyz1234567890" ~=? codexw "morse" "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----"
-    , "to morse code" ~: "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----" ~=? codexw "to morse" "abcdefghijklmnopqrstuvwxyz1234567890"
+    , "to morse code" ~: "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----" ~=? codexw "to morse" "foo bar abcdefghijklmnopqrstuvwxyz1234567890"
     ]
     where codexw = either error id . codex . words
 
