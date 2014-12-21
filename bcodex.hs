@@ -6,7 +6,9 @@ import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
 import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isDigit, isLetter, isSpace, chr, ord, toUpper)
 import Data.Function (on)
 import Data.List (unfoldr, groupBy)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Tuple (swap)
+import qualified Data.Map as Map
 import System.Environment (getArgs)
 import Text.Read (readMaybe)
 import Test.HUnit
@@ -82,6 +84,13 @@ isDelimiterExtra _ = False
 
 filterDelimiterLefts :: CxList b -> CxList b
 filterDelimiterLefts = filter (not . isDelimiterExtra)
+
+crunchMorseDelimiterLefts :: CxList b -> CxList b
+crunchMorseDelimiterLefts = mapMaybe f
+    where f (Left (CxExtra ""   )) = Nothing
+          f (Left (CxExtra " "  )) = Nothing
+          f (Left (CxExtra " / ")) = Just (Left (CxExtra " "))
+          f x = Just x
 
 mapAllStrings :: (String -> String) -> CxList String -> CxList String
 mapAllStrings f = map f'
@@ -265,6 +274,24 @@ toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
 fromBase64Codex :: String -> CxList Int
 fromBase64Codex = mapLefts CxBadString . ungroupRights . mapRights fromBase64 . tokensOf isBase64Char
 
+-- morse
+morseTable :: [(Char, String)]
+morseTable = [ ('a', ".-"), ('b', "-..."), ('c', "-.-."), ('d', "-.."), ('e', "."), ('f', "..-."), ('g', "--."), ('h', "...."), ('i', ".."), ('j', ".---"), ('k', "-.-"), ('l', ".-.."), ('m', "--"), ('n', "-."), ('o', "---"), ('p', ".--."), ('q', "--.-"), ('r', ".-."), ('s', "..."), ('t', "-"), ('u', "..-"), ('v', "...-"), ('w', ".--"), ('x', "-..-"), ('y', "-.--"), ('z', "--.."), ('0', "-----"), ('1', ".----"), ('2', "..---"), ('3', "...--"), ('4', "....-"), ('5', "....."), ('6', "-...."), ('7', "--..."), ('8', "---.."), ('9', "----."), (',', "--..--"), ('.', ".-.-.-"), ('?', "..--.."), (';', "-.-.-."), (':', "---..."), ('\'', ".----.'"), ('-', "-....-"), ('/', "-..-."), ('(', "-.--.-"), (')', "-.--.-"), ('_', "..--.-") ]
+
+toMorseMap :: Map.Map Char String
+toMorseMap = Map.fromList morseTable
+
+fromMorseMap :: Map.Map String Char
+fromMorseMap = Map.fromList $ map swap morseTable
+
+fromMorse :: String -> CxElem Char
+fromMorse s = case Map.lookup s fromMorseMap of
+    Just c -> Right c
+    Nothing -> Left $ CxBadString s
+
+fromMorseCodex :: String -> CxList String
+fromMorseCodex = mapRights (:[]) . bindRights fromMorse . crunchMorseDelimiterLefts . mapLefts CxExtra . tokensOf (`elem` ".-")
+
 -- readers
 singleSpaces :: String -> String
 singleSpaces "  " = " "
@@ -294,6 +321,10 @@ wrapS2I f = Left $ \cxl -> concatMap ff cxl
     where ff (Right s) = f s
           ff (Left c) = [Left c]
 
+wrapS2S :: (String -> CxList String) -> CxCoder String
+wrapS2S f = Right $ \cxl -> concatMap ff cxl
+    where ff (Right s) = f s
+          ff (Left c) = [Left c]
 
 unpluralize :: String -> Maybe String
 unpluralize s = case last s of
@@ -337,6 +368,7 @@ parseSingleStringCoder s = case s of
     ((readInt -> Just n) : (unpl -> "byte"  ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 (2*n), rs)
     ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
     ("shift" : (readInt -> Just n) : rs) -> Right (alphaStringCoder (+n), rs)
+    ("morse" : rs) -> Right (wrapS2S fromMorseCodex, rs)
     ("strip" : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (not . p), rs)
     ("only"  : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter p, rs)
     _ -> Left "Could not parse string coder"
