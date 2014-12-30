@@ -363,6 +363,12 @@ parseCharClass s = case s of
     "letters"    -> Just isLetter
     _ -> Nothing
 
+translate :: String -> String -> Char -> Char
+translate from to = let m = Map.fromList (zip from (repeatLast to)) in \c -> fromMaybe c (Map.lookup c m)
+    where repeatLast [x] = repeat x
+          repeatLast (x:xs) = x : repeatLast xs
+          repeatLast [] = error "translate with empty from string"
+
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = case s of
     ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1,  rs)
@@ -381,6 +387,7 @@ parseSingleStringCoder s = case s of
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
     ("strip" : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (not . p), rs)
     ("only"  : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter p, rs)
+    ("translate" : csFrom : "to" : csTo : rs) -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
     _ -> Left "Could not parse string coder"
 
 parseSingleIntCoder :: [String] -> Either String (CxCoder Int, [String])
@@ -471,6 +478,7 @@ tests = TestList
     , "rot13" ~: "nowhere AbJuReR" ~=? codexw "rot13" "abjurer NoWhErE"
     , "from morse code" ~: "foo bar abcdefghijklmnopqrstuvwxyz1234567890" ~=? codexw "morse" "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----"
     , "to morse code" ~: "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----" ~=? codexw "to morse" "foo bar abcdefghijklmnopqrstuvwxyz1234567890"
+    , "translate" ~: "foo bar 01111" ~=? codexw "translate xyz to 01" "foo bar xyzzy"
     ]
     where codexw = either error id . codex . words
 
