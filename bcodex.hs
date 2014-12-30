@@ -3,7 +3,7 @@
 
 import Control.Monad (void)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
-import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isDigit, isLetter, isSpace, chr, ord, toUpper)
+import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isLetter, isSpace, chr, ord, toUpper)
 import Data.Function (on)
 import Data.List (unfoldr, groupBy)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -125,16 +125,22 @@ fromBaseDigits :: (Integral a) => a -> [a] -> a
 fromBaseDigits base ds = foldr f 0 $ reverse ds
     where f d ttl = ttl * base + d
 
+asBaseDigits :: Int -> Int -> [Int]
+asBaseDigits base num = reverse $ f num
+    where f n
+            | n == 0 = []
+            | otherwise = (\(q, r) -> r : f q) (n `quotRem` base)
+
 asBaseDigitsSized :: Int -> Int -> Int -> CxElem [Int]
 asBaseDigitsSized base size num =
-    case f base size num of
+    case f size num of
         Just xs -> Right $ reverse xs
         Nothing -> Left . CxBadInt $ num
     where
-        f b sz n
+        f sz n
             | sz == 0   = if n == 0 then Just [] else Nothing
             | n < 0     = Nothing
-            | otherwise = (\(q, r) -> fmap (r :) (f b (sz - 1) q)) (n `quotRem` b)
+            | otherwise = (\(q, r) -> fmap (r :) (f (sz - 1) q)) (n `quotRem` base)
 
 asSingleBaseDigit :: Int -> Int -> CxElem Int
 asSingleBaseDigit base num
@@ -174,6 +180,14 @@ toRadixTokens radix blockSize
     = mapRights unwords . groupRights . bindRights (toRadixToken radix blockSize)
 toUpperRadixTokens :: Int -> Int -> CxList Int -> CxList String
 toUpperRadixTokens radix blockSize = mapRights (map toUpper) . toRadixTokens radix blockSize
+
+fromRadixNumbers :: Int -> String -> CxList Int
+fromRadixNumbers radix
+    = filterDelimiterLefts . map (either (Left . CxExtra) (Right . fromBaseDigits radix . map digitToInt)) . tokensOf (isRadixDigit radix)
+
+toRadixNumbers :: Int -> CxList Int -> CxList String
+toRadixNumbers radix
+    = doubleLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights
 
 -- alpha
 
@@ -369,6 +383,19 @@ translate from to = let m = Map.fromList (zip from (repeatLast to)) in \c -> fro
           repeatLast (x:xs) = x : repeatLast xs
           repeatLast [] = error "translate with empty from string"
 
+parseBaseSynonym :: String -> Maybe Int
+parseBaseSynonym s = case s of
+    "number"  -> Just 10
+    "numbers" -> Just 10
+    "decimal" -> Just 10
+    "bin"     -> Just 2
+    "binary"  -> Just 2
+    "oct"     -> Just 8
+    "octal"   -> Just 8
+    "hex"         -> Just 16
+    "hexadecimal" -> Just 16
+    _ -> Nothing
+
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = case s of
     ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1,  rs)
@@ -376,7 +403,8 @@ parseSingleStringCoder s = case s of
     ((unpl -> "byte"  ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 2, rs)
     ((unpl -> "char"  ) : rs) -> Right (wrapS2I $ map (Right . ord), rs)
     (("alpha"         ) : rs) -> Right (wrapS2I   fromAlphaStream, rs)
-    ((unpl -> "number") : rs) -> Right (wrapS2I $ filterDelimiterLefts . mapLefts CxExtra . bindRights readEither . tokensOf isDigit, rs)
+    ((parseBaseSynonym -> Just b) : rs) -> Right (wrapS2I $ fromRadixNumbers b, rs)
+    ("base" : (readInt -> Just b) : rs) -> Right (wrapS2I $ fromRadixNumbers b, rs)
     (("base64"        ) : rs) -> Right (wrapS2I   fromBase64Codex, rs)
     ((readInt -> Just n) : (unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 n, rs)
     ((readInt -> Just n) : (unpl -> "nybble") : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 n, rs)
@@ -400,7 +428,9 @@ parseSingleIntCoder s = case s of
     ("to" : (unpl -> "char"  ) : rs) -> Right (Right $ singleLeftSpaces . mapRights chrString, rs)
     ("to" : (unpl -> "alpha" ) : rs) -> Right (Right $ singleLeftSpaces . toAlphaStream, rs)
     ("to" : (unpl -> "Alpha" ) : rs) -> Right (Right $ singleLeftSpaces . toUpperAlphaStream, rs)
-    ("to" : (unpl -> "number") : rs) -> Right (Right $ doubleLeftSpaces . mapRights (unwords . map show) . groupRights, rs)
+    ("to" : (unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)
+    ("to" : (parseBaseSynonym -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
+    ("to" : "base" : (readInt -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
     ("to" : (unpl -> "base64") : rs) -> Right (Right   toBase64Codex, rs)
     ("to" : (readInt -> Just n) : (unpl -> "bit"   ) : rs) -> Right (Right $ toRadixTokens 2 n, rs)
     ("to" : (readInt -> Just n) : (unpl -> "nybble") : rs) -> Right (Right $ toRadixTokens 16 n, rs)
@@ -456,6 +486,8 @@ tests = TestList
     , "numbers to Alpha" ~: "ABCDEFGHIJ" ~=? codexw "numbers to Alpha" "1 2 3 4 5 6 7 8 9 10"
     , "numbers to alpha with spaces" ~: "(foo bar) (baz quux)" ~=? codexw "numbers to alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)"
     , "numbers to alpha only alpha" ~: "foobarbazquux" ~=? codexw "numbers to alpha only alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)"
+    , "numbers to binary" ~: "1 10 11 100 101 110 111" ~=? codexw "numbers to binary" "1 2 3 4 5 6 7"
+    , "binary to numbers" ~: "1 2 3 4 5 6 7" ~=? codexw "binary to numbers" "1 10 11 100 101 110 111"
     , "chars to bytes" ~: "3a 2d 29" ~=? codexw "chars to bytes" ":-)"
     , "chars to Bytes" ~: "3A 2D 29" ~=? codexw "chars to Bytes" ":-)"
     , "chars to Bytes strip spaces" ~: "3A2D29" ~=? codexw "chars to Bytes strip spaces" ":-)"
