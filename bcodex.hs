@@ -3,7 +3,7 @@
 
 import Control.Monad (void)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
-import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isLetter, isSpace, chr, ord, toUpper)
+import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isLetter, isSpace, chr, ord, toUpper, toLower)
 import Data.Function (on)
 import Data.List (unfoldr, groupBy)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -290,14 +290,14 @@ fromBase64Codex = mapLefts CxBadString . ungroupRights . mapRights fromBase64 . 
 
 -- morse
 morseTable :: [(Char, String)]
-morseTable = [ ('a', ".-"), ('b', "-..."), ('c', "-.-."), ('d', "-.."), ('e', "."), ('f', "..-."), ('g', "--."), ('h', "...."), ('i', ".."), ('j', ".---"), ('k', "-.-"), ('l', ".-.."), ('m', "--"), ('n', "-."), ('o', "---"), ('p', ".--."), ('q', "--.-"), ('r', ".-."), ('s', "..."), ('t', "-"), ('u', "..-"), ('v', "...-"), ('w', ".--"), ('x', "-..-"), ('y', "-.--"), ('z', "--.."), ('0', "-----"), ('1', ".----"), ('2', "..---"), ('3', "...--"), ('4', "....-"), ('5', "....."), ('6', "-...."), ('7', "--..."), ('8', "---.."), ('9', "----."), (',', "--..--"), ('.', ".-.-.-"), ('?', "..--.."), (';', "-.-.-."), (':', "---..."), ('\'', ".----.'"), ('-', "-....-"), ('/', "-..-."), ('(', "-.--.-"), (')', "-.--.-"), ('_', "..--.-") ]
+morseTable = [ ('a', ".-"), ('b', "-..."), ('c', "-.-."), ('d', "-.."), ('e', "."), ('f', "..-."), ('g', "--."), ('h', "...."), ('i', ".."), ('j', ".---"), ('k', "-.-"), ('l', ".-.."), ('m', "--"), ('n', "-."), ('o', "---"), ('p', ".--."), ('q', "--.-"), ('r', ".-."), ('s', "..."), ('t', "-"), ('u', "..-"), ('v', "...-"), ('w', ".--"), ('x', "-..-"), ('y', "-.--"), ('z', "--.."), ('0', "-----"), ('1', ".----"), ('2', "..---"), ('3', "...--"), ('4', "....-"), ('5', "....."), ('6', "-...."), ('7', "--..."), ('8', "---.."), ('9', "----."), (',', "--..--"), ('.', ".-.-.-"), ('?', "..--.."), (';', "-.-.-."), (':', "---..."), ('\'', ".----."), ('-', "-....-"), ('/', "-..-."), ('(', "-.--.-"), (')', "-.--.-"), ('_', "..--.-") ]
 
 toMorseMap :: Map.Map Char String
 toMorseMap = Map.fromList morseTable
 
 toMorse :: Char -> CxElem String
 toMorse ' ' = Left $ CxExtra " / "
-toMorse c = case Map.lookup c toMorseMap of
+toMorse c = case Map.lookup (toLower c) toMorseMap of
     Just s -> Right s
     Nothing -> Left $ CxExtra [c]
 
@@ -396,6 +396,16 @@ parseBaseSynonym s = case s of
     "hexadecimal" -> Just 16
     _ -> Nothing
 
+parseCaseSynonym :: String -> Maybe (Char -> Char)
+parseCaseSynonym s = case s of
+    "upper"      -> Just toUpper
+    "uppercase"  -> Just toUpper
+    "uppercased" -> Just toUpper
+    "lower"      -> Just toLower
+    "lowercase"  -> Just toLower
+    "lowercased" -> Just toLower
+    _ -> Nothing
+
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = case s of
     ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1,  rs)
@@ -416,6 +426,8 @@ parseSingleStringCoder s = case s of
     ("strip" : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (not . p), rs)
     ("only"  : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter p, rs)
     ("translate" : csFrom : "to" : csTo : rs) -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
+    ((parseCaseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
+    ("lower" : rs) -> Right (Right . mapAllStrings $ map toUpper, rs)
     _ -> Left "Could not parse string coder"
 
 parseSingleIntCoder :: [String] -> Either String (CxCoder Int, [String])
@@ -511,6 +523,8 @@ tests = TestList
     , "from morse code" ~: "foo bar abcdefghijklmnopqrstuvwxyz1234567890" ~=? codexw "morse" "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----"
     , "to morse code" ~: "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----" ~=? codexw "to morse" "foo bar abcdefghijklmnopqrstuvwxyz1234567890"
     , "translate" ~: "foo bar 01111" ~=? codexw "translate xyz to 01" "foo bar xyzzy"
+    , "uppercase" ~: "FOO BAR BAZ QUUX" ~=? codexw "uppercase" "foo BAR baz QUUX"
+    , "lowercase" ~: "foo bar baz quux" ~=? codexw "lowercase" "foo BAR baz QUUX"
     ]
     where codexw = either error id . codex . words
 
