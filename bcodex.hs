@@ -1,6 +1,7 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE ViewPatterns #-}
-
+-- imports {{{
+import Control.Applicative ((<$>))
 import Control.Monad (void)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
 import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isLetter, isSpace, chr, ord, toUpper, toLower)
@@ -12,14 +13,8 @@ import qualified Data.Map as Map
 import System.Environment (getArgs)
 import Text.Read (readMaybe)
 import Test.HUnit
-
--- A command-line utility for converting between "encodings".
---
--- Example usage:
--- bcodex.hs bytes to chars
--- bcodex.hs 8 bits to chars
--- bcodex.hs
-
+-- }}}
+-- Cx- data and either {{{
 data CxLeft = CxBadString String | CxExtra String | CxBadInt Int deriving (Eq, Ord, Show)
 
 showCxLeft :: CxLeft -> String
@@ -29,8 +24,8 @@ showCxLeft (CxBadInt n) = "[" ++ show n ++ "]"
 
 type CxElem a = Either CxLeft a
 type CxList a = [CxElem a]
-
--- higher-order operations on Either
+-- }}}
+-- higher-order operations on Either {{{
 swapEither :: Either a b -> Either b a
 swapEither (Left x) = Right x
 swapEither (Right x) = Left x
@@ -98,29 +93,18 @@ mapAllStrings f = map f'
           f' (Left  (CxExtra     s)) = Left (CxExtra     (f s))
           f' (Right s) = Right (f s)
           f' x = x
-
--- utilities to get strings
-
+-- }}}
+-- utilities to get strings {{{
 str1 :: Char -> String
 str1 c = [c]
 
 intToDigitString :: Int -> String
 intToDigitString = str1 . intToDigit
 
-
 chrString :: Int -> String
 chrString = str1 . chr
-
--- stuff
-
-mod1 :: (Integral a) => a -> a -> a
-a `mod1` b = let x = a `mod` b in if x == 0 then b else x
-
-splitInto :: Int -> [a] -> [[a]]
-splitInto n = takeWhile (not . null) . unfoldr (Just . splitAt n)
-
--- radix things
-
+-- }}}
+-- radix things {{{
 fromBaseDigits :: (Integral a) => a -> [a] -> a
 fromBaseDigits base ds = foldr f 0 $ reverse ds
     where f d ttl = ttl * base + d
@@ -153,6 +137,9 @@ tokensOf p ls
 
 isRadixDigit :: Int -> Char -> Bool
 isRadixDigit radix ch = isHexDigit ch && (digitToInt ch < radix)
+
+splitInto :: Int -> [a] -> [[a]]
+splitInto n = takeWhile (not . null) . unfoldr (Just . splitAt n)
 
 fromRadixToken :: Int -> Int -> String -> CxList Int
 fromRadixToken radix blockSize s
@@ -188,8 +175,10 @@ fromRadixNumbers radix
 toRadixNumbers :: Int -> CxList Int -> CxList String
 toRadixNumbers radix
     = doubleLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights
-
--- alpha
+-- }}}
+-- alpha {{{
+mod1 :: (Integral a) => a -> a -> a
+a `mod1` b = let x = a `mod` b in if x == 0 then b else x
 
 alphaToInt :: Char -> CxElem Int
 alphaToInt ch
@@ -225,9 +214,8 @@ toAlphaStream = bindRights intToAlphaString
 
 toUpperAlphaStream :: CxList Int -> CxList String
 toUpperAlphaStream = bindRights intToUpperAlphaString
-
--- base 64 stuff, copied from my matasano work
-
+-- }}}
+-- base 64 {{{
 toBase64Char :: Int -> Char
 toBase64Char x
     | 0 <= x && x < 26 = chr (ord 'A' + x)
@@ -287,8 +275,8 @@ toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
 
 fromBase64Codex :: String -> CxList Int
 fromBase64Codex = mapLefts CxBadString . ungroupRights . mapRights fromBase64 . tokensOf isBase64Char
-
--- morse
+-- }}}
+-- morse {{{
 morseTable :: [(Char, String)]
 morseTable = [ ('a', ".-"), ('b', "-..."), ('c', "-.-."), ('d', "-.."), ('e', "."), ('f', "..-."), ('g', "--."), ('h', "...."), ('i', ".."), ('j', ".---"), ('k', "-.-"), ('l', ".-.."), ('m', "--"), ('n', "-."), ('o', "---"), ('p', ".--."), ('q', "--.-"), ('r', ".-."), ('s', "..."), ('t', "-"), ('u', "..-"), ('v', "...-"), ('w', ".--"), ('x', "-..-"), ('y', "-.--"), ('z', "--.."), ('0', "-----"), ('1', ".----"), ('2', "..---"), ('3', "...--"), ('4', "....-"), ('5', "....."), ('6', "-...."), ('7', "--..."), ('8', "---.."), ('9', "----."), (',', "--..--"), ('.', ".-.-.-"), ('?', "..--.."), (';', "-.-.-."), (':', "---..."), ('\'', ".----."), ('-', "-....-"), ('/', "-..-."), ('(', "-.--.-"), (')', "-.--.-"), ('_', "..--.-") ]
 
@@ -314,8 +302,15 @@ fromMorse s = case Map.lookup s fromMorseMap of
 
 fromMorseCodex :: String -> CxList String
 fromMorseCodex = mapRights (:[]) . bindRights fromMorse . crunchMorseDelimiterLefts . mapLefts CxExtra . tokensOf (`elem` ".-")
-
--- readers
+-- }}}
+-- translate {{{
+translate :: String -> String -> Char -> Char
+translate from to = let m = Map.fromList (zip from (repeatLast to)) in \c -> fromMaybe c (Map.lookup c m)
+    where repeatLast [x] = repeat x
+          repeatLast (x:xs) = x : repeatLast xs
+          repeatLast [] = error "translate with empty from string"
+-- }}}
+-- fancy string things used in parsing and in-between CxCoders {{{
 singleSpaces :: String -> String
 singleSpaces "  " = " "
 singleSpaces s = s
@@ -337,6 +332,14 @@ readEither s = case readMaybe s of
     Just n  -> Right n
     Nothing -> Left s
 
+readInt :: String -> Maybe Int
+readInt = readMaybe
+
+unpl :: String -> String
+unpl s = fromMaybe s $ unpluralize s
+
+-- }}}
+-- CxCoders {{{
 type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList String)
 
 wrapS2I :: (String -> CxList Int) -> CxCoder String
@@ -361,12 +364,12 @@ rcompose :: (CxList a -> CxList b) -> CxCoder b -> CxCoder a
 rcompose f (Left f') = Left (f' . f)
 rcompose f (Right f') = Right (f' . f)
 
-readInt :: String -> Maybe Int
-readInt = readMaybe
-
-unpl :: String -> String
-unpl s = fromMaybe s $ unpluralize s
-
+applyCxCoder :: CxCoder a -> a -> String
+applyCxCoder c = case c of
+    Left f ->  concatMap (either showCxLeft show) . f . (:[]) . Right
+    Right f -> concatMap (either showCxLeft id)  . f . (:[]) . Right
+-- }}}
+-- parsing command line args (synonyms etc.) {{{
 parseCharClass :: String -> Maybe (Char -> Bool)
 parseCharClass s = case s of
     "space"      -> Just isSpace
@@ -376,12 +379,6 @@ parseCharClass s = case s of
     "letter"     -> Just isLetter
     "letters"    -> Just isLetter
     _ -> Nothing
-
-translate :: String -> String -> Char -> Char
-translate from to = let m = Map.fromList (zip from (repeatLast to)) in \c -> fromMaybe c (Map.lookup c m)
-    where repeatLast [x] = repeat x
-          repeatLast (x:xs) = x : repeatLast xs
-          repeatLast [] = error "translate with empty from string"
 
 parseBaseSynonym :: String -> Maybe Int
 parseBaseSynonym s = case s of
@@ -475,19 +472,10 @@ parseIntCoder s = do
         Right f -> do
             c' <- parseStringCoder rs
             return $ rcompose f c'
-
-applyCxCoder :: CxCoder a -> a -> String
-applyCxCoder c = case c of
-    Left f ->  concatMap (either showCxLeft show) . f . (:[]) . Right
-    Right f -> concatMap (either showCxLeft id)  . f . (:[]) . Right
-
+-- }}}
 codex :: [String] -> Either String (String -> String)
--- codex ["rot13"] = Right $ output . toAlphaStream . mapRights ((`mod1` 26) . (+13)) . fromAlphaStream
-codex args = do
-    sf <- parseStringCoder args
-    return $ applyCxCoder sf
-
-tests :: Test
+codex args = applyCxCoder <$> parseStringCoder args
+tests :: Test -- {{{
 tests = TestList
     [ "alpha to numbers" ~: "1 2 3 4 5 6 7 8 9 10" ~=? codexw "alpha to numbers" "abcdefghij"
     , "alpha to numbers with spaces" ~: "17 21 9 3 11  2 18 15 23 14  6 15 24" ~=? codexw "alpha to numbers" "quick brown fox"
@@ -527,7 +515,7 @@ tests = TestList
     , "lowercase" ~: "foo bar baz quux" ~=? codexw "lowercase" "foo BAR baz QUUX"
     ]
     where codexw = either error id . codex . words
-
+-- }}}
 main :: IO ()
 main = do
     args <- getArgs
@@ -535,3 +523,4 @@ main = do
         case codex args of
             Left em -> error em
             Right f -> interact $ unlines . map f . lines
+-- vim:set fdm=marker:
