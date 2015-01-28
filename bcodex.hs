@@ -447,6 +447,7 @@ parseSingleIntCoder s = case s of
     ("plus"  : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (+ n), rs)
     ("minus" : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ subtract n, rs)
     ("times" : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (* n), rs)
+    ("mod"   : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (`mod` n), rs)
     _ -> Left "Could not parse int coder"
 
 parseStringCoder :: [String] -> Either String (CxCoder String)
