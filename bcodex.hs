@@ -403,6 +403,14 @@ parseCaseSynonym s = case s of
     "lowercased" -> Just toLower
     _ -> Nothing
 
+parseFilterSynonym :: String -> Maybe ((a -> Bool) -> (a -> Bool))
+parseFilterSynonym s = case s of
+    "filter" -> Just id
+    "only"   -> Just id
+    "strip"  -> Just (not .)
+    "drop"   -> Just (not .)
+    _        -> Nothing
+
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = case s of
     ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1,  rs)
@@ -420,8 +428,7 @@ parseSingleStringCoder s = case s of
     ("shift" : (readInt -> Just n) : rs) -> Right (alphaStringCoder (+n), rs)
     ("morse" : rs) -> Right (wrapS2S fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
-    ("strip" : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (not . p), rs)
-    ("only"  : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter p, rs)
+    ((parseFilterSynonym -> Just f) : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (f p), rs)
     ("translate" : csFrom : "to" : csTo : rs) -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
     ((parseCaseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
     ("lower" : rs) -> Right (Right . mapAllStrings $ map toUpper, rs)
@@ -514,6 +521,8 @@ tests = TestList
     , "translate" ~: "foo bar 01111" ~=? codexw "translate xyz to 01" "foo bar xyzzy"
     , "uppercase" ~: "FOO BAR BAZ QUUX" ~=? codexw "uppercase" "foo BAR baz QUUX"
     , "lowercase" ~: "foo bar baz quux" ~=? codexw "lowercase" "foo BAR baz QUUX"
+    , "filter" ~: "fooBARbazQUUXquickbrownfox" ~=? codexw "filter letters" "foo BAR baz QUUX / quick brown fox"
+    , "strip" ~: "fooBARbazQUUX/quickbrownfox" ~=? codexw "strip spaces" "foo BAR baz QUUX / quick brown fox"
     ]
     where codexw = either error id . codex . words
 -- }}}
