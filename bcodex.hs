@@ -1,7 +1,7 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE ViewPatterns #-}
 -- imports {{{
-import Control.Arrow (left)
+import Control.Arrow (left, right)
 import Control.Applicative ((<$>))
 import Control.Monad (void)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
@@ -27,15 +27,11 @@ type CxElem a = Either CxLeft a
 type CxList a = [CxElem a]
 -- }}}
 -- higher-order operations on Either {{{
-swapEither :: Either a b -> Either b a
-swapEither (Left x) = Right x
-swapEither (Right x) = Left x
-
 mapRights :: (Functor f) => (a -> b) -> f (Either c a) -> f (Either c b)
-mapRights = fmap . fmap
+mapRights = fmap . right
 
 mapLefts :: (Functor f) => (a -> b) -> f (Either a c) -> f (Either b c)
-mapLefts f = fmap (swapEither . fmap f . swapEither)
+mapLefts = fmap . left
 
 mapBadStrings :: (Functor f) => (String -> String) -> f (CxElem c) -> f (CxElem c)
 mapBadStrings f = fmap f'
