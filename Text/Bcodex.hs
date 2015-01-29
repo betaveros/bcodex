@@ -1,9 +1,9 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE ViewPatterns #-}
+module Text.Bcodex (codex) where
 -- imports {{{
 import Control.Arrow (left, right)
 import Control.Applicative ((<$>))
-import Control.Monad (void)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
 import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isLetter, isSpace, chr, ord, toUpper, toLower)
 import Data.Function (on)
@@ -11,9 +11,7 @@ import Data.List (unfoldr, groupBy)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Tuple (swap)
 import qualified Data.Map as Map
-import System.Environment (getArgs)
 import Text.Read (readMaybe)
-import Test.HUnit
 -- }}}
 -- Cx- data and either {{{
 data CxLeft = CxBadString String | CxExtra String | CxBadInt Int deriving (Eq, Ord, Show)
@@ -492,54 +490,4 @@ parseIntCoder s = do
 -- }}}
 codex :: [String] -> Either String (String -> String)
 codex args = applyCxCoder <$> parseStringCoder args
-tests :: Test -- {{{
-tests = TestList
-    [ "alpha to numbers" ~: "1 2 3 4 5 6 7 8 9 10" ~=? codexw "alpha to numbers" "abcdefghij"
-    , "alpha to numbers with spaces" ~: "17 21 9 3 11  2 18 15 23 14  6 15 24" ~=? codexw "alpha to numbers" "quick brown fox"
-    , "alpha to numbers with garbage" ~: "17 21 9 3 11 / 2 18 15 23 14 / 6 15 24" ~=? codexw "alpha to numbers" "quick / brown / fox"
-    , "alpha to numbers with more garbage" ~: "(6 15 15  2 1 18) (2 1 26  17 21 21 24)" ~=? codexw "alpha to numbers" "(foo bar) (baz quux)"
-    , "alpha to bytes with more garbage" ~: "(06 0f 0f  02 01 12) (02 01 1a  11 15 15 18)" ~=? codexw "alpha to bytes" "(foo bar) (baz quux)"
-    , "numbers to alpha" ~: "abcdefghij" ~=? codexw "numbers to alpha" "1 2 3 4 5 6 7 8 9 10"
-    , "numbers to Alpha" ~: "ABCDEFGHIJ" ~=? codexw "numbers to Alpha" "1 2 3 4 5 6 7 8 9 10"
-    , "numbers to alpha with spaces" ~: "(foo bar) (baz quux)" ~=? codexw "numbers to alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)"
-    , "numbers to alpha only alpha" ~: "foobarbazquux" ~=? codexw "numbers to alpha only alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)"
-    , "numbers to binary" ~: "1 10 11 100 101 110 111" ~=? codexw "numbers to binary" "1 2 3 4 5 6 7"
-    , "binary to numbers" ~: "1 2 3 4 5 6 7" ~=? codexw "binary to numbers" "1 10 11 100 101 110 111"
-    , "chars to bytes" ~: "3a 2d 29" ~=? codexw "chars to bytes" ":-)"
-    , "chars to Bytes" ~: "3A 2D 29" ~=? codexw "chars to Bytes" ":-)"
-    , "chars to Bytes strip spaces" ~: "3A2D29" ~=? codexw "chars to Bytes strip spaces" ":-)"
-    , "bytes to chars" ~: ":-)" ~=? codexw "bytes to chars" "3a 2D 29"
-    , "bytes to chars with spaces" ~: ":-) :-(" ~=? codexw "bytes to chars" "3a 2D 29  3A 2d 28"
-    , "bytes to chars with garbage" ~: "[:-)]" ~=? codexw "bytes to chars" "[3a 2D 29]"
-    , "chars to numbers" ~: "58 45 41" ~=? codexw "chars to numbers" ":-)"
-    , "numbers to chars" ~: ":-)" ~=? codexw "numbers to chars" "58 45 41"
-    , "numbers to chars with spaces" ~: ":-) :-(" ~=? codexw "numbers to chars" "58 45 41  58 45 40"
-    , "8 bits to bytes" ~: "3a 2d 29" ~=? codexw "8 bits to bytes" "00111010 00101101 00101001"
-    , "8 bits to bytes continuous" ~: "3a 2d 29" ~=? codexw "8 bits to bytes" "001110100010110100101001"
-    , "8 bits to bytes strip spaces" ~: "3a2d29" ~=? codexw "8 bits to bytes strip spaces" "001110100010110100101001"
-    , "8 bits to bytes with extra spaces" ~: "3a  2d  29" ~=? codexw "8 bits to bytes" "00111010  00101101  00101001"
-    , "to base 64" ~: "YW55IGNhcm5hbCBwbGVhc3VyZQ==" ~=? codexw "chars to base64" "any carnal pleasure"
-    , "from base 64" ~: "any carnal pleasure" ~=? codexw "base64 to chars" "YW55IGNhcm5hbCBwbGVhc3VyZQ=="
-    , "to base 64 weird" ~: "Pz4/Pj8+" ~=? codexw "chars to base64" "?>?>?>"
-    , "from base 64 weird" ~: "?>?>?>" ~=? codexw "base64 to chars" "Pz4/Pj8+"
-    , "shift 3" ~: "sulphur" ~=? codexw "shift 3" "primero"
-    , "shift 23" ~: "xYzaBc" ~=? codexw "shift 23" "aBcdEf"
-    , "rot13" ~: "nowhere AbJuReR" ~=? codexw "rot13" "abjurer NoWhErE"
-    , "from morse code" ~: "foo bar abcdefghijklmnopqrstuvwxyz1234567890" ~=? codexw "morse" "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----"
-    , "to morse code" ~: "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----" ~=? codexw "to morse" "foo bar abcdefghijklmnopqrstuvwxyz1234567890"
-    , "translate" ~: "foo bar 01111" ~=? codexw "translate xyz to 01" "foo bar xyzzy"
-    , "uppercase" ~: "FOO BAR BAZ QUUX" ~=? codexw "uppercase" "foo BAR baz QUUX"
-    , "lowercase" ~: "foo bar baz quux" ~=? codexw "lowercase" "foo BAR baz QUUX"
-    , "filter" ~: "fooBARbazQUUXquickbrownfox" ~=? codexw "filter letters" "foo BAR baz QUUX / quick brown fox"
-    , "strip" ~: "fooBARbazQUUX/quickbrownfox" ~=? codexw "strip spaces" "foo BAR baz QUUX / quick brown fox"
-    ]
-    where codexw = either error id . codex . words
--- }}}
-main :: IO ()
-main = do
-    args <- getArgs
-    if args == ["test"] then void (runTestTT tests) else
-        case codex args of
-            Left em -> error em
-            Right f -> interact $ unlines . map f . lines
 -- vim:set fdm=marker:

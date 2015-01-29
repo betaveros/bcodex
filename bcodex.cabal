@@ -1,0 +1,24 @@
+name:                bcodex
+version:             0.1.0.0
+synopsis:            A command-line utility for converting between "encodings"
+description:         A command-line utility for converting between "encodings"
+license:             MIT
+license-file:        LICENSE
+author:              Brian Chen
+maintainer:          brian.chxn@gmail.com
+category:            Text
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+executable bcodex
+    main-is:             Main.hs
+    build-depends:       base >=4.7 && <4.8, containers
+    default-language:    Haskell2010
+
+test-suite tests
+    ghc-options: -Wall
+    type: exitcode-stdio-1.0
+    main-is: BcodexSpec.hs
+    build-depends:       base, containers, hspec
+    default-language:    Haskell2010
