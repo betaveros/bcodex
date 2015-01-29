@@ -105,6 +105,7 @@ fromBaseDigits base ds = foldr f 0 $ reverse ds
     where f d ttl = ttl * base + d
 
 asBaseDigits :: Int -> Int -> [Int]
+asBaseDigits _ 0 = [0]
 asBaseDigits base num = reverse $ f num
     where f n
             | n == 0 = []

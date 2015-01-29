@@ -1,5 +1,6 @@
 -- file Spec.hs
 import Test.Hspec
+import Test.QuickCheck
 import Text.Bcodex
 
 main :: IO ()
@@ -16,14 +17,22 @@ main = hspec $ do
                     codexw "alpha to numbers" "(foo bar) (baz quux)" `shouldBe` "(6 15 15  2 1 18) (2 1 26  17 21 21 24)"
                 it "can convert letters to bytes" $ do
                     codexw "alpha to bytes" "(foo bar) (baz quux)" `shouldBe` "(06 0f 0f  02 01 12) (02 01 1a  11 15 15 18)"
+                it "is invertible" $
+                    forAll (listOf (choose ('a','z'))) (\s -> codexw "alpha to numbers numbers to alpha" s === s)
             context "when converting from numbers" $ do
                 it "can convert numbers to letters" $ do codexw "numbers to alpha" "1 2 3 4 5 6 7 8 9 10" `shouldBe` "abcdefghij"
                 it "can convert numbers to UPPERCASE" $ do codexw "numbers to Alpha" "1 2 3 4 5 6 7 8 9 10" `shouldBe` "ABCDEFGHIJ"
                 it "makes doubled spaces single" $ do codexw "numbers to alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)" `shouldBe` "(foo bar) (baz quux)"
                 it "can strip nonletters" $ do codexw "numbers to alpha only alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)" `shouldBe` "foobarbazquux"
+                it "is invertible" $
+                    forAll (listOf (choose (1 :: Int,26))) (\ns ->
+                        let s = unwords (map show ns) in codexw "numbers to alpha alpha to numbers" s === s)
         context "when converting between bases" $ do
-            it "can convert numbers to binary" $ do codexw "numbers to binary" "1 2 3 4 5 6 7" `shouldBe` "1 10 11 100 101 110 111"
-            it "can convert binary to numbers" $ do codexw "binary to numbers" "1 10 11 100 101 110 111" `shouldBe` "1 2 3 4 5 6 7"
+            it "can convert numbers to binary" $ do codexw "numbers to binary" "0 1 2 3 4 5 6 7" `shouldBe` "0 1 10 11 100 101 110 111"
+            it "can convert binary to numbers" $ do codexw "binary to numbers" "0 1 10 11 100 101 110 111" `shouldBe` "0 1 2 3 4 5 6 7"
+            it "is invertible" $
+                forAll (listOf (arbitrary :: Gen (NonNegative Int))) (\ns ->
+                    let s = unwords (map (show . getNonNegative) ns) in codexw "numbers to binary binary to numbers" s === s)
         context "when working with characters" $ do
             context "when converting from characters" $ do
                 it "can convert chars to bytes" $ do codexw "chars to bytes" ":-)" `shouldBe` "3a 2d 29"
