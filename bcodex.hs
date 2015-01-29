@@ -431,7 +431,6 @@ parseSingleStringCoder s = case s of
     ((parseFilterSynonym -> Just f) : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (f p), rs)
     ("translate" : csFrom : "to" : csTo : rs) -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
     ((parseCaseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
-    ("lower" : rs) -> Right (Right . mapAllStrings $ map toUpper, rs)
     _ -> Left "Could not parse string coder"
 
 parseSingleIntCoder :: [String] -> Either String (CxCoder Int, [String])
