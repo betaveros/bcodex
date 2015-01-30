@@ -14,11 +14,12 @@ import qualified Data.Map as Map
 import Text.Read (readMaybe)
 -- }}}
 -- Cx- data and either {{{
-data CxLeft = CxBadString String | CxExtra String | CxBadInt Int deriving (Eq, Ord, Show)
+data CxLeft = CxBadString String | CxExtra String | CxDelim String | CxBadInt Int deriving (Eq, Ord, Show)
 
 showCxLeft :: CxLeft -> String
 showCxLeft (CxBadString s) = "{" ++ s ++ "}"
 showCxLeft (CxExtra s) = s
+showCxLeft (CxDelim s) = s
 showCxLeft (CxBadInt n) = "[" ++ show n ++ "]"
 
 type CxElem a = Either CxLeft a
@@ -36,6 +37,7 @@ mapBadStrings f = fmap f'
     where f' (Right r) = Right r
           f' (Left (CxBadString s)) = Left (CxBadString (f s))
           f' (Left (CxExtra     s)) = Left (CxExtra     (f s))
+          f' (Left (CxDelim     s)) = Left (CxDelim s)
           f' (Left (CxBadInt i)) = Left (CxBadInt i)
 
 bindRights :: (Functor f) => (a -> Either c b) -> f (Either c a) -> f (Either c b)
@@ -66,14 +68,20 @@ concatExtraStrings (x : xs) = x : concatExtraStrings xs
 ungroupRights :: [Either a [b]] -> [Either a b]
 ungroupRights = concatMap (either (\a -> [Left a]) (map Right))
 
-isDelimiterExtra :: CxElem b -> Bool
-isDelimiterExtra (Left (CxExtra "" )) = True
-isDelimiterExtra (Left (CxExtra " ")) = True
-isDelimiterExtra (Left (CxExtra ",")) = True
-isDelimiterExtra _ = False
+isDelimiter :: String -> Bool
+isDelimiter "" = True
+isDelimiter " " = True
+isDelimiter "," = True
+isDelimiter _ = False
 
 filterDelimiterLefts :: CxList b -> CxList b
-filterDelimiterLefts = filter (not . isDelimiterExtra)
+filterDelimiterLefts = map f
+    where f (Left (CxExtra s)) | isDelimiter s = Left (CxDelim s)
+          f x = x
+dropDelimiterLefts :: CxList b -> CxList b
+dropDelimiterLefts = filter f
+    where f (Left (CxDelim _)) = False
+          f _ = True
 
 crunchMorseDelimiterLefts :: CxList b -> CxList b
 crunchMorseDelimiterLefts = mapMaybe f
@@ -86,6 +94,7 @@ mapAllStrings :: (String -> String) -> CxList String -> CxList String
 mapAllStrings f = map f'
     where f' (Left  (CxBadString s)) = Left (CxBadString (f s))
           f' (Left  (CxExtra     s)) = Left (CxExtra     (f s))
+          f' (Left  (CxDelim     s)) = Left (CxDelim     (f s))
           f' (Right s) = Right (f s)
           f' x = x
 -- }}}
@@ -170,7 +179,7 @@ fromRadixNumbers radix
 
 toRadixNumbers :: Int -> CxList Int -> CxList String
 toRadixNumbers radix
-    = doubleLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights
+    = doubleLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights . dropDelimiterLefts
 -- }}}
 -- alpha {{{
 mod1 :: (Integral a) => a -> a -> a
@@ -206,10 +215,10 @@ fromAlphaStream :: String -> CxList Int
 fromAlphaStream = map alphaToInt
 
 toAlphaStream :: CxList Int -> CxList String
-toAlphaStream = bindRights intToAlphaString
+toAlphaStream = bindRights intToAlphaString . dropDelimiterLefts
 
 toUpperAlphaStream :: CxList Int -> CxList String
-toUpperAlphaStream = bindRights intToUpperAlphaString
+toUpperAlphaStream = bindRights intToUpperAlphaString . dropDelimiterLefts
 -- }}}
 -- base 64 {{{
 toBase64Char :: Int -> Char
@@ -444,7 +453,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "Nybble") : rs) -> Right (Right $ toUpperRadixStream 16, rs)
         ((unpl -> "byte"  ) : rs) -> Right (Right $ doubleLeftSpaces . toRadixTokens 16 2, rs)
         ((unpl -> "Byte"  ) : rs) -> Right (Right $ doubleLeftSpaces . toUpperRadixTokens 16 2, rs)
-        ((unpl -> "char"  ) : rs) -> Right (Right $ singleLeftSpaces . mapRights chrString, rs)
+        ((unpl -> "char"  ) : rs) -> Right (Right $ singleLeftSpaces . mapRights chrString . dropDelimiterLefts, rs)
         ((unpl -> "alpha" ) : rs) -> Right (Right $ singleLeftSpaces . toAlphaStream, rs)
         ((unpl -> "Alpha" ) : rs) -> Right (Right $ singleLeftSpaces . toUpperAlphaStream, rs)
         ((unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)
