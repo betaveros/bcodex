@@ -1,11 +1,11 @@
 #!/usr/bin/env runhaskell
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns, PatternGuards #-}
 module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, parseStringCoder, parseIntCoder, codex) where
 -- imports {{{
 import Control.Arrow (left, right)
 import Control.Applicative ((<$>))
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
-import Data.Char (digitToInt, intToDigit, isHexDigit, isAlpha, isLetter, isSpace, chr, ord, toUpper, toLower)
+import Data.Char (intToDigit, isAlpha, isLetter, isSpace, chr, ord, toUpper, toLower)
 import Data.Function (on)
 import Data.List (unfoldr, groupBy)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -57,6 +57,14 @@ groupRights (Right r : xs) =
         (Right rs : gps) -> Right (r:rs) : gps
         gps -> Right [r] : gps
 
+intersperseBetweenRights :: Either a b -> [Either a b] -> [Either a b]
+intersperseBetweenRights _ [] = []
+intersperseBetweenRights b (Left c : xs) = Left c : intersperseBetweenRights b xs
+intersperseBetweenRights b (Right r : xs) =
+    case intersperseBetweenRights b xs of
+        (Right rs : gps) -> Right r : b : Right rs : gps
+        gps -> Right r : gps
+
 concatExtraStrings :: CxList a -> CxList a
 concatExtraStrings [] = []
 concatExtraStrings (Left (CxExtra r) : xs) =
@@ -101,6 +109,7 @@ dropDelimiterLefts = mapMaybe f
 crunchMorseDelimiterLefts :: CxList b -> CxList b
 crunchMorseDelimiterLefts = mapMaybe f
     where f (Left (CxExtra ""   )) = Nothing
+          f (Left (CxDelim _    )) = Nothing
           f (Left (CxExtra " "  )) = Nothing
           f (Left (CxExtra " / ")) = Just (Left (CxExtra " "))
           f x = Just x
@@ -156,7 +165,16 @@ tokensOf p ls
     = mapLeftRight (p . head) $ groupBy ((==) `on` p) ls
 
 isRadixDigit :: Int -> Char -> Bool
-isRadixDigit radix ch = isHexDigit ch && (digitToInt ch < radix)
+isRadixDigit radix ch
+    | radix <= 10 = '0' <= ch && ord ch - ord '0' < radix
+    | otherwise = ('0' <= ch && ch <= '9')
+                  || maybe False (< radix - 9) (alphaToInt ch)
+
+radixDigitToInt :: Char -> Int
+radixDigitToInt ch
+    | '0' <= ch && ch <= '9' = ord ch - ord '0'
+    | Just n <- alphaToInt ch = n + 9
+    | otherwise = error $ "radixDigitToInt failed, unexpected char " ++ show ch
 
 splitInto :: Int -> [a] -> [[a]]
 splitInto n = takeWhile (not . null) . unfoldr (Just . splitAt n)
@@ -164,7 +182,7 @@ splitInto n = takeWhile (not . null) . unfoldr (Just . splitAt n)
 fromRadixToken :: Int -> Int -> String -> CxList Int
 fromRadixToken radix blockSize s
     = map (\block -> if length block == blockSize
-        then Right (fromBaseDigits radix $ map digitToInt block)
+        then Right (fromBaseDigits radix $ map radixDigitToInt block)
         else Left . CxBadString $ block
     ) $ splitInto blockSize s
 
@@ -190,7 +208,7 @@ toUpperRadixTokens radix blockSize = mapRights (map toUpper) . toRadixTokens rad
 
 fromRadixNumbers :: Int -> String -> CxList Int
 fromRadixNumbers radix
-    = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map digitToInt)) . tokensOf (isRadixDigit radix)
+    = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map radixDigitToInt)) . tokensOf (isRadixDigit radix)
 
 fromRadixNumbersCodex :: Int -> CxList String -> CxList Int
 fromRadixNumbersCodex radix = concatMap ff
@@ -206,11 +224,14 @@ toRadixNumbers radix
 mod1 :: (Integral a) => a -> a -> a
 a `mod1` b = let x = a `mod` b in if x == 0 then b else x
 
-alphaToInt :: Char -> CxElem Int
+alphaToInt :: Char -> Maybe Int
 alphaToInt ch
-    | 'a' <= ch && ch <= 'z' = Right $ ord ch - ord '`'
-    | 'A' <= ch && ch <= 'Z' = Right $ ord ch - ord '@'
-    | otherwise              = Left . CxExtra $ [ch]
+    | 'a' <= ch && ch <= 'z' = Just $ ord ch - ord '`'
+    | 'A' <= ch && ch <= 'Z' = Just $ ord ch - ord '@'
+    | otherwise              = Nothing
+
+alphaToElem :: Char -> CxElem Int
+alphaToElem ch = maybe (Left (CxExtra [ch])) Right $ alphaToInt ch
 
 mapUnderAlpha :: (Int -> Int) -> Char -> Char
 mapUnderAlpha f ch
@@ -233,7 +254,7 @@ intToUpperAlphaString :: Int -> CxElem String
 intToUpperAlphaString = fmap str1 . intToUpperAlpha
 
 fromAlphaStream :: String -> CxList Int
-fromAlphaStream = map alphaToInt
+fromAlphaStream = map alphaToElem
 
 fromAlphaStreamCodex :: CxList String -> CxList Int
 fromAlphaStreamCodex = concatExtraStrings . concatMap ff . concatExtraStrings
@@ -321,7 +342,7 @@ toMorse c = case Map.lookup (toLower c) toMorseMap of
     Nothing -> Left $ CxExtra [c]
 
 toMorseCodex :: CxList String -> CxList String
-toMorseCodex = mapRights unwords . groupRights . bindRights toMorse . ungroupRights
+toMorseCodex = intersperseBetweenRights (Left (CxDelim " ")) . bindRights toMorse . ungroupRights
 
 fromMorseMap :: Map.Map String Char
 fromMorseMap = Map.fromList $ map swap morseTable
@@ -331,8 +352,10 @@ fromMorse s = case Map.lookup s fromMorseMap of
     Just c -> Right c
     Nothing -> Left $ CxBadString s
 
-fromMorseCodex :: String -> CxList String
-fromMorseCodex = mapRights (:[]) . bindRights fromMorse . crunchMorseDelimiterLefts . mapLefts CxExtra . tokensOf (`elem` ".-")
+fromMorseCodex :: CxList String -> CxList String
+fromMorseCodex = mapRights (:[]) . bindRights fromMorse . crunchMorseDelimiterLefts . concatMap ff
+    where ff (Right s) = mapLefts CxExtra . tokensOf (`elem` ".-") $ s
+          ff (Left c) = [Left c]
 -- }}}
 -- translate {{{
 translate :: String -> String -> Char -> Char
@@ -370,11 +393,6 @@ type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList String)
 
 wrapS2I :: (String -> CxList Int) -> CxCoder String
 wrapS2I f = Left $ \cxl -> concatMap ff cxl
-    where ff (Right s) = f s
-          ff (Left c) = [Left c]
-
-wrapS2S :: (String -> CxList String) -> CxCoder String
-wrapS2S f = Right $ \cxl -> concatMap ff cxl
     where ff (Right s) = f s
           ff (Left c) = [Left c]
 
@@ -459,7 +477,7 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
         _ -> Left $ "Expecting 'bit[s]', 'byte[s]', or 'nybble[s]' after number " ++ show n ++ ", got " ++ show tokenstr
     ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
     ("shift" : (readInt -> Just n) : rs) -> Right (alphaStringCoder (+n), rs)
-    ("morse" : rs) -> Right (wrapS2S fromMorseCodex, rs)
+    ("morse" : rs)        -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
     ((parseFilterSynonym -> Just f) : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (f p), rs)
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of

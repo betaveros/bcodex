@@ -42,8 +42,9 @@ main = hspec $ do
                 aps "bin" [Right "10 100 1000"] `shouldBe` Left [Right 2, Left (CxDelim " "), Right 4, Left (CxDelim " "), Right 8]
                 aps "binary" [Right "10 100 1000"] `shouldBe` Left [Right 2, Left (CxDelim " "), Right 4, Left (CxDelim " "), Right 8]
             it "works with specified bases" $ do
+                aps "base 11" [Right "a1"] `shouldBe` Left [Right 111]
                 aps "base 13" [Right "10 26 100"] `shouldBe` Left [Right 13, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 169]
-                aps "base 36" [Right "darn"] `shouldBe` Left [Right 640283]
+                aps "base 36" [Right "darn"] `shouldBe` Left [Right 620483]
 
             it "shrinks spaces to be extras" $ do
                 aps "numbers" [Right "42  13   37"] `shouldBe` Left [Right 42, Left (CxExtra " "), Right 13, Left (CxExtra "  "), Right 37]
@@ -91,9 +92,9 @@ main = hspec $ do
 
         context "when working with morse" $ do
             it "can convert from morse" $
-                aps "morse" [Right "--- .-. --.."] `shouldBe` Right [Right "o", Left (CxDelim " "), Right "r", Left (CxDelim " "), Right "z"]
+                aps "morse" [Right "--- .-. --.."] `shouldBe` Right [Right "o", Right "r", Right "z"]
             it "can convert from weird morse" $
-                aps "morse" [Right "---.. ...- -.--.-"] `shouldBe` Right [Right "8", Left (CxDelim " "), Right "v", Left (CxDelim " "), Right ")"]
+                aps "morse" [Right "---.. ...- -.--.-"] `shouldBe` Right [Right "8", Right "v", Right ")"]
             it "can convert to morse" $
                 aps "to morse" [Right "orz"] `shouldBe` Right [Right "---", Left (CxDelim " "), Right ".-.", Left (CxDelim " "), Right "--.."]
             it "can convert to weird morse" $
