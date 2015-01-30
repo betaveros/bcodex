@@ -69,18 +69,39 @@ ungroupRights :: [Either a [b]] -> [Either a b]
 ungroupRights = concatMap (either (\a -> [Left a]) (map Right))
 
 isDelimiter :: String -> Bool
-isDelimiter "" = True
-isDelimiter " " = True
 isDelimiter "," = True
-isDelimiter _ = False
+isDelimiter s = all (== ' ') s
 
 extraOrDelim :: String -> CxLeft
 extraOrDelim s = if isDelimiter s then CxDelim s else CxExtra s
 
+delimOrShrink :: String -> CxLeft
+delimOrShrink s = case s of
+    "" -> CxDelim ""
+    " " -> CxDelim " "
+    "," -> CxDelim ","
+    (' ':r) | all (== ' ') r -> CxExtra r
+    x -> CxExtra x
+
+forceExtraOrDelim :: CxLeft -> CxLeft
+forceExtraOrDelim (CxDelim s) = extraOrDelim s
+forceExtraOrDelim (CxExtra s) = extraOrDelim s
+forceExtraOrDelim x = x
+
+delimToExtra :: CxElem a -> CxElem a
+delimToExtra (Left (CxDelim s)) = Left (CxExtra s)
+delimToExtra x = x
+
 dropDelimiterLefts :: CxList b -> CxList b
-dropDelimiterLefts = filter f
-    where f (Left (CxDelim _)) = False
-          f _ = True
+dropDelimiterLefts = mapMaybe f
+    where f (Left (CxDelim s)) =
+            case s of
+                "" -> Nothing
+                " " -> Nothing
+                "," -> Nothing
+                (' ':x) -> Just (Left (CxExtra x))
+                _ -> error "no such delimiter"
+          f x = Just x
 
 crunchMorseDelimiterLefts :: CxList b -> CxList b
 crunchMorseDelimiterLefts = mapMaybe f
@@ -158,7 +179,7 @@ fromRadixStream radix blockSize s
 
 toRadixStream :: Int -> CxList Int -> CxList String
 toRadixStream radix
-    = map (fmap intToDigitString . (asSingleBaseDigit radix =<<))
+    = map (delimToExtra . fmap intToDigitString . (asSingleBaseDigit radix =<<))
 toUpperRadixStream :: Int -> CxList Int -> CxList String
 toUpperRadixStream radix = mapRights (map toUpper) . toRadixStream radix
 
@@ -174,11 +195,17 @@ toUpperRadixTokens radix blockSize = mapRights (map toUpper) . toRadixTokens rad
 
 fromRadixNumbers :: Int -> String -> CxList Int
 fromRadixNumbers radix
-    = map (either (Left . extraOrDelim) (Right . fromBaseDigits radix . map digitToInt)) . tokensOf (isRadixDigit radix)
+    = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map digitToInt)) . tokensOf (isRadixDigit radix)
+
+fromRadixNumbersCodex :: Int -> CxList String -> CxList Int
+fromRadixNumbersCodex radix = concatMap ff
+    where ff (Right s) = fromRadixNumbers radix s
+          ff (Left (CxExtra c)) = [Left (CxExtra (shrinkSpaces c))]
+          ff (Left x) = [Left x]
 
 toRadixNumbers :: Int -> CxList Int -> CxList String
 toRadixNumbers radix
-    = doubleLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights
+    = expandLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights
 -- }}}
 -- alpha {{{
 mod1 :: (Integral a) => a -> a -> a
@@ -212,6 +239,11 @@ intToUpperAlphaString = fmap str1 . intToUpperAlpha
 
 fromAlphaStream :: String -> CxList Int
 fromAlphaStream = map alphaToInt
+
+fromAlphaStreamCodex :: CxList String -> CxList Int
+fromAlphaStreamCodex = concatExtraStrings . concatMap ff . concatExtraStrings
+    where ff (Right s) = fromAlphaStream s
+          ff (Left x) = [Left x]
 
 toAlphaStream :: CxList Int -> CxList String
 toAlphaStream = bindRights intToAlphaString . dropDelimiterLefts
@@ -323,6 +355,14 @@ doubleSpaces :: String -> String
 doubleSpaces " " = "  "
 doubleSpaces s = s
 
+shrinkSpaces :: String -> String
+shrinkSpaces (' ' : r@(' ':s)) | all (== ' ') s = r
+shrinkSpaces s = s
+
+expandSpaces :: String -> String
+expandSpaces r@(' ' : s) | all (== ' ') s = ' ' : r
+expandSpaces s = s
+
 mapExtraStringGroups :: (String -> String) -> CxList a -> CxList a
 mapExtraStringGroups f = mapBadStrings f . concatExtraStrings
 
@@ -330,6 +370,8 @@ singleLeftSpaces :: CxList a -> CxList a
 singleLeftSpaces = mapExtraStringGroups singleSpaces
 doubleLeftSpaces :: CxList a -> CxList a
 doubleLeftSpaces = mapExtraStringGroups doubleSpaces
+expandLeftSpaces :: CxList a -> CxList a
+expandLeftSpaces = mapExtraStringGroups expandSpaces
 
 readEither :: String -> Either String Int
 readEither s = case readMaybe s of
@@ -424,11 +466,11 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     ((unpl -> "nybble") : rs) -> Right (wrapS2I $ fromRadixStream 16 1, rs)
     ((unpl -> "byte"  ) : rs) -> Right (wrapS2I $ fromRadixStream 16 2, rs)
     ((unpl -> "char"  ) : rs) -> Right (wrapS2I $ map (Right . ord), rs)
-    (("alpha"         ) : rs) -> Right (wrapS2I   fromAlphaStream, rs)
-    ((parseBaseSynonym -> Just b) : rs) -> Right (wrapS2I $ fromRadixNumbers b, rs)
+    (("alpha"         ) : rs) -> Right (Left fromAlphaStreamCodex, rs)
+    ((parseBaseSynonym -> Just b) : rs) -> Right (Left $ fromRadixNumbersCodex b, rs)
     ("base" : bstr : rs) -> case readInt bstr of
         Nothing -> Left $ "Unexpected " ++ show bstr ++ " after 'base' (expecting integer)"
-        Just b -> Right (wrapS2I $ fromRadixNumbers b, rs)
+        Just b -> Right (Left $ fromRadixNumbersCodex b, rs)
     (("base64"        ) : rs) -> Right (wrapS2I   fromBase64Codex, rs)
     ((readInt -> Just n) : tokenstr : rs) -> case unpl tokenstr of
         "bit"    -> Right (wrapS2I $ fromRadixStream 2 n, rs)
@@ -456,8 +498,8 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "byte"  ) : rs) -> Right (Right $ doubleLeftSpaces . toRadixTokens 16 2, rs)
         ((unpl -> "Byte"  ) : rs) -> Right (Right $ doubleLeftSpaces . toUpperRadixTokens 16 2, rs)
         ((unpl -> "char"  ) : rs) -> Right (Right $ singleLeftSpaces . mapRights chrString . dropDelimiterLefts, rs)
-        ((unpl -> "alpha" ) : rs) -> Right (Right $ singleLeftSpaces . toAlphaStream, rs)
-        ((unpl -> "Alpha" ) : rs) -> Right (Right $ singleLeftSpaces . toUpperAlphaStream, rs)
+        ((unpl -> "alpha" ) : rs) -> Right (Right $ toAlphaStream, rs)
+        ((unpl -> "Alpha" ) : rs) -> Right (Right $ toUpperAlphaStream, rs)
         ((unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)
         ((parseBaseSynonym -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
         ("base" : (readInt -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)

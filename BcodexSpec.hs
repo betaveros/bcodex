@@ -15,17 +15,58 @@ main = hspec $ do
             it "accepts extras" $
                 aps "alpha" [Right "a?b%c"] `shouldBe` Left [Right 1, Left (CxExtra "?"), Right 2, Left (CxExtra "%"), Right 3]
 
-            it "does not consider spaces delimiters" $
+            it "does not consider spaces delimiters" $ do
                 aps "alpha" [Right "a b c"] `shouldBe` Left [Right 1, Left (CxExtra " "), Right 2, Left (CxExtra " "), Right 3]
+
+            it "does not expand content spaces" $ do
+                aps "alpha" [Right " "] `shouldBe` Left [Left (CxExtra " ")]
+                aps "alpha" [Right "  "] `shouldBe` Left [Left (CxExtra "  ")]
+
+            it "preserves known extra spaces" $ do
+                aps "alpha" [Right "a", Left (CxExtra " "), Right "b"] `shouldBe` Left [Right 1, Left (CxExtra " "), Right 2]
+
+            it "preserves known delimiter spaces" $ do
+                aps "alpha" [Right "a", Left (CxDelim " "), Right "b"] `shouldBe` Left [Right 1, Left (CxDelim " "), Right 2]
 
         context "when working with numbers" $ do
             it "works" $
                 aps "numbers" [Right "42 13 37"] `shouldBe` Left [Right 42, Left (CxDelim " "), Right 13, Left (CxDelim " "), Right 37]
 
+            it "shrinks spaces to be extras" $ do
+                aps "numbers" [Right "42  13   37"] `shouldBe` Left [Right 42, Left (CxExtra " "), Right 13, Left (CxExtra "  "), Right 37]
+                aps "numbers" [Right "  "] `shouldBe` Left [Left (CxExtra " ")]
+
+            it "shrinks extras" $ do
+                aps "numbers" [Left (CxExtra "  ")] `shouldBe` Left [Left (CxExtra " ")]
+
         context "when working with streams of bits" $ do
             it "works" $ aps "8 bits" [Right "001110100010110100101001"] `shouldBe` Left [Right 58, Right 45, Right 41]
             it "takes single spaces as delimiters" $ aps "8 bits" [Right "00111010 00101101 00101001"] `shouldBe` Left [Right 58, Left (CxDelim " "), Right 45, Left (CxDelim " "), Right 41]
-            it "keeps double spaces" $ aps "8 bits" [Right "00111010  00101101  00101001"] `shouldBe` Left [Right 58, Left (CxExtra "  "), Right 45, Left (CxExtra "  "), Right 41]
+            it "keeps double spaces" $ aps "8 bits" [Right "00111010  00101101  00101001"] `shouldBe` Left [Right 58, Left (CxDelim "  "), Right 45, Left (CxDelim "  "), Right 41]
+
+    describe "parseIntCoder" $ do
+        context "when working with letters" $ do
+            it "works" $ api "to alpha" [Right 15, Right 18, Right 26] `shouldBe` Right [Right "o", Right "r", Right "z"]
+            it "works" $ api "to alpha" [Right 15, Right 18, Right 26] `shouldBe` Right [Right "o", Right "r", Right "z"]
+            it "eliminates small delimiters" $ api "to alpha" [Right 3, Left (CxDelim " "), Right 24] `shouldBe` Right [Right "c", Right "x"]
+            it "shrinks spaces" $ do
+                api "to alpha" [Left (CxDelim "  ")] `shouldBe` Right [Left (CxExtra " ")]
+                api "to alpha" [Right 1, Left (CxDelim "  "), Right 2] `shouldBe` Right [Right "a", Left (CxExtra " "), Right "b"]
+            it "preserves extra spaces" $ do
+                api "to alpha" [Left (CxExtra "  ")] `shouldBe` Right [Left (CxExtra "  ")]
+
+        context "when working with numbers" $ do
+            it "works" $
+                api "to numbers" [Right 253] `shouldBe` Right [Right "253"]
+
+            it "preserves delim spaces" $
+                api "to numbers" [Right 253, Left (CxDelim " "), Right 492] `shouldBe` Right [Right "253", Left (CxDelim " "), Right "492"]
+
+            it "expands extra spaces" $
+                api "to numbers" [Right 253, Left (CxExtra " "), Right 492] `shouldBe` Right [Right "253", Left (CxExtra "  "), Right "492"]
+
+        context "when working with bytes" $ do
+            it "works" $ api "to bytes" [Right 58, Left (CxDelim " "), Right 45, Left (CxDelim " "), Right 41] `shouldBe` Right [Right "3a", Left (CxDelim " "), Right "2d", Left (CxDelim " "), Right "29"]
 
     modifyMaxSuccess (*2) $ describe "codex" $ do
         context "when working with letters" $ do
@@ -41,6 +82,15 @@ main = hspec $ do
                     codexw "alpha to bytes" "(foo bar) (baz quux)" `shouldBe` "(06 0f 0f  02 01 12) (02 01 1a  11 15 15 18)"
                 it "is invertible" $
                     forAll (listOf (choose ('a','z'))) (\s -> codexw "alpha to numbers numbers to alpha" s === s)
+                it "expands spaces" $ do
+                    codexw "alpha to numbers" "ab cd" `shouldBe` "1 2  3 4"
+                    codexw "alpha to numbers" " " `shouldBe` "  "
+                    codexw "alpha to numbers" "       " `shouldBe` "        "
+                it "expands double spaces" $ do
+                    codexw "alpha to numbers" "ab cd  ef   gh" `shouldBe` "1 2  3 4   5 6    7 8"
+                it "preserves spaces on roundtrip" $ do
+                    codexw "alpha to numbers numbers to alpha" "a b" `shouldBe` "a b"
+                    codexw "alpha to numbers numbers to alpha" "a  b" `shouldBe` "a  b"
                 it "is invertible despite garbage" $
                     forAll (listOf (arbitrary `suchThat` (\c -> c < 'A' || c > 'Z'))) (\s -> codexw "alpha to numbers numbers to alpha" s === s)
             context "when converting from numbers" $ do
@@ -52,6 +102,13 @@ main = hspec $ do
                     codexw "numbers to alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)" `shouldBe` "(foo bar) (baz quux)"
                 it "can strip nonletters" $
                     codexw "numbers to alpha only alpha" "(6 15 15  2 1 18) (2 1 26  17 21 21 24)" `shouldBe` "foobarbazquux"
+                it "condenses spaces" $ do
+                    codexw "numbers to alpha" "1 2  3 4" `shouldBe` "ab cd"
+                    codexw "numbers to alpha" "  " `shouldBe` " "
+                    codexw "numbers to alpha" "        " `shouldBe` "       "
+                it "preserves spaces on roundtrip" $ do
+                    codexw "numbers to alpha alpha to numbers" "1 2" `shouldBe` "1 2"
+                    codexw "numbers to alpha alpha to numbers" "1  2" `shouldBe` "1  2"
                 it "is invertible" $
                     forAll (listOf (choose (1 :: Int,26))) (\ns ->
                         let s = unwords (map show ns) in codexw "numbers to alpha alpha to numbers" s === s)
@@ -62,6 +119,9 @@ main = hspec $ do
             it "is invertible" $
                 forAll (listOf (arbitrary :: Gen (NonNegative Int))) (\ns ->
                     let s = unwords (map (show . getNonNegative) ns) in codexw "numbers to binary binary to numbers" s === s)
+            it "keeps double spaces" $ do
+                codexw "numbers to binary" "0  1  2  3" `shouldBe` "0  1  10  11"
+                codexw "binary to numbers" "0  1  10  11" `shouldBe` "0  1  2  3"
             it "is mostly invertible despite garbage" $
                 forAll arbitrary $ (\s -> codexw "numbers to binary binary to numbers" s === codexw "numbers to numbers" s)
         context "when working with characters" $ do
@@ -122,5 +182,6 @@ main = hspec $ do
             it "has no spaces after stripping" $
                 forAll arbitrary (\s -> not . any isSpace $ codexw "strip spaces" s)
     where aps = applyCxCoder . either error id . parseStringCoder . words
+          api = applyCxCoder . either error id . parseIntCoder . words
           codexw = either error id . codex . words
 
