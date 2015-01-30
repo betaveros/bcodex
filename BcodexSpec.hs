@@ -29,8 +29,21 @@ main = hspec $ do
                 aps "alpha" [Right "a", Left (CxDelim " "), Right "b"] `shouldBe` Left [Right 1, Left (CxDelim " "), Right 2]
 
         context "when working with numbers" $ do
-            it "works" $
+            it "works" $ do
                 aps "numbers" [Right "42 13 37"] `shouldBe` Left [Right 42, Left (CxDelim " "), Right 13, Left (CxDelim " "), Right 37]
+                aps "decimal" [Right "42 13 37"] `shouldBe` Left [Right 42, Left (CxDelim " "), Right 13, Left (CxDelim " "), Right 37]
+            it "works with hexadecimal" $ do
+                aps "hex" [Right "10 20 30"] `shouldBe` Left [Right 16, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 48]
+                aps "hexadecimal" [Right "10 20 30"] `shouldBe` Left [Right 16, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 48]
+            it "works with octal" $ do
+                aps "oct" [Right "10 20 30"] `shouldBe` Left [Right 8, Left (CxDelim " "), Right 16, Left (CxDelim " "), Right 24]
+                aps "octal" [Right "10 20 30"] `shouldBe` Left [Right 8, Left (CxDelim " "), Right 16, Left (CxDelim " "), Right 24]
+            it "works with binary" $ do
+                aps "bin" [Right "10 100 1000"] `shouldBe` Left [Right 2, Left (CxDelim " "), Right 4, Left (CxDelim " "), Right 8]
+                aps "binary" [Right "10 100 1000"] `shouldBe` Left [Right 2, Left (CxDelim " "), Right 4, Left (CxDelim " "), Right 8]
+            it "works with specified bases" $ do
+                aps "base 13" [Right "10 26 100"] `shouldBe` Left [Right 13, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 169]
+                aps "base 36" [Right "darn"] `shouldBe` Left [Right 640283]
 
             it "shrinks spaces to be extras" $ do
                 aps "numbers" [Right "42  13   37"] `shouldBe` Left [Right 42, Left (CxExtra " "), Right 13, Left (CxExtra "  "), Right 37]
@@ -39,15 +52,75 @@ main = hspec $ do
             it "shrinks extras" $ do
                 aps "numbers" [Left (CxExtra "  ")] `shouldBe` Left [Left (CxExtra " ")]
 
-        context "when working with streams of bits" $ do
-            it "works" $ aps "8 bits" [Right "001110100010110100101001"] `shouldBe` Left [Right 58, Right 45, Right 41]
-            it "takes single spaces as delimiters" $ aps "8 bits" [Right "00111010 00101101 00101001"] `shouldBe` Left [Right 58, Left (CxDelim " "), Right 45, Left (CxDelim " "), Right 41]
-            it "keeps double spaces" $ aps "8 bits" [Right "00111010  00101101  00101001"] `shouldBe` Left [Right 58, Left (CxDelim "  "), Right 45, Left (CxDelim "  "), Right 41]
+        context "when working with tokens of digits" $ do
+            it "works with bits" $ do
+                aps "8 bits" [Right "001110100010110100101001"] `shouldBe` Left [Right 58, Right 45, Right 41]
+                aps "7 bits" [Right "011101001011010101001"] `shouldBe` Left [Right 58, Right 45, Right 41]
+            it "works with nybbles" $ do
+                aps "2 nybbles" [Right "3a2D29"] `shouldBe` Left [Right 58, Right 45, Right 41]
+                aps "3 nybbles" [Right "03a02D029"] `shouldBe` Left [Right 58, Right 45, Right 41]
+            it "works with bytes" $ do
+                aps "1 byte" [Right "3a2D29"] `shouldBe` Left [Right 58, Right 45, Right 41]
+                aps "2 byte" [Right "003a002D0029"] `shouldBe` Left [Right 58, Right 45, Right 41]
+
+            it "takes single spaces as delimiters" $
+                aps "8 bits" [Right "00111010 00101101 00101001"] `shouldBe` Left [Right 58, Left (CxDelim " "), Right 45, Left (CxDelim " "), Right 41]
+            it "keeps double spaces" $
+                aps "8 bits" [Right "00111010  00101101  00101001"] `shouldBe` Left [Right 58, Left (CxDelim "  "), Right 45, Left (CxDelim "  "), Right 41]
+            it "preserves known delimiter spaces" $
+                aps "9 bits" [Right "011111101", Left (CxDelim " "), Right "111101100"] `shouldBe` Left [Right 253, Left (CxDelim " "), Right 492]
+            it "preserves known extra spaces" $
+                aps "9 bits" [Right "011111101", Left (CxExtra " "), Right "111101100"] `shouldBe` Left [Right 253, Left (CxExtra " "), Right 492]
+
+        context "when working with base64" $ do
+            it "works" $
+                aps "base64" [Right "TWFu"] `shouldBe` Left [Right 77, Right 97, Right 110]
+            it "handles one equals" $
+                aps "base64" [Right "ZS4="] `shouldBe` Left [Right 101, Right 46]
+            it "handles two equals" $
+                aps "base64" [Right "Lg=="] `shouldBe` Left [Right 46]
+            it "considers spaces bad strings" $ do
+                aps "base64" [Right "QQ== QQ=="] `shouldBe` Left [Right 65, Left (CxBadString " "), Right 65]
+                aps "base64" [Right "QQ==  QQ=="] `shouldBe` Left [Right 65, Left (CxBadString "  "), Right 65]
+            it "considers garbage bad strings" $ do
+                aps "base64" [Right "QQ==@**@QQ=="] `shouldBe` Left [Right 65, Left (CxBadString "@**@"), Right 65]
+            it "preserves known delimiter spaces" $
+                aps "base64" [Right "QQ==", Left (CxDelim " "), Right "QQ=="] `shouldBe` Left [Right 65, Left (CxDelim " "), Right 65]
+            it "preserves known extra spaces" $
+                aps "base64" [Right "QQ==", Left (CxExtra " "), Right "QQ=="] `shouldBe` Left [Right 65, Left (CxExtra " "), Right 65]
+
+        context "when working with morse" $ do
+            it "can convert from morse" $
+                aps "morse" [Right "--- .-. --.."] `shouldBe` Right [Right "o", Left (CxDelim " "), Right "r", Left (CxDelim " "), Right "z"]
+            it "can convert from weird morse" $
+                aps "morse" [Right "---.. ...- -.--.-"] `shouldBe` Right [Right "8", Left (CxDelim " "), Right "v", Left (CxDelim " "), Right ")"]
+            it "can convert to morse" $
+                aps "to morse" [Right "orz"] `shouldBe` Right [Right "---", Left (CxDelim " "), Right ".-.", Left (CxDelim " "), Right "--.."]
+            it "can convert to weird morse" $
+                aps "to morse" [Right "8v)"] `shouldBe` Right [Right "---..", Left (CxDelim " "), Right "...-", Left (CxDelim " "), Right "-.--.-"]
+
+        context "when working with shifts" $ do
+            it "works" $
+                aps "shift 1" [Right "abcxyz"] `shouldBe` Right [Right "bcdyza"]
+
+        context "when working with filters" $ do
+            it "can drop spaces" $
+                aps "drop spaces" [Right " a: b ", Left (CxBadString " c: d "), Left (CxExtra " e: f "), Left (CxDelim " g: h ")] `shouldBe` Right [Right "a:b", Left (CxBadString "c:d"), Left (CxExtra "e:f"), Left (CxDelim "g:h")]
+            it "can filter letters" $
+                aps "filter letters" [Right " a: b ", Left (CxBadString " c: d "), Left (CxExtra " e: f "), Left (CxDelim " g: h ")] `shouldBe` Right [Right "ab", Left (CxBadString "cd"), Left (CxExtra "ef"), Left (CxDelim "gh")]
+
+        context "when transforming text" $ do
+            it "can translate" $
+                aps "translate 123 to xyz" [Right "12332144"] `shouldBe` Right [Right "xyzzyx44"]
+            it "can uppercase" $
+                aps "uppercase" [Right "This is SPARTA"] `shouldBe` Right [Right "THIS IS SPARTA"]
+            it "can lowercase" $
+                aps "lowercase" [Right "The WORLD is quiet here"] `shouldBe` Right [Right "the world is quiet here"]
 
     describe "parseIntCoder" $ do
         context "when working with letters" $ do
             it "works" $ api "to alpha" [Right 15, Right 18, Right 26] `shouldBe` Right [Right "o", Right "r", Right "z"]
-            it "works" $ api "to alpha" [Right 15, Right 18, Right 26] `shouldBe` Right [Right "o", Right "r", Right "z"]
+
             it "eliminates small delimiters" $ api "to alpha" [Right 3, Left (CxDelim " "), Right 24] `shouldBe` Right [Right "c", Right "x"]
             it "shrinks spaces" $ do
                 api "to alpha" [Left (CxDelim "  ")] `shouldBe` Right [Left (CxExtra " ")]
@@ -65,8 +138,28 @@ main = hspec $ do
             it "expands extra spaces" $
                 api "to numbers" [Right 253, Left (CxExtra " "), Right 492] `shouldBe` Right [Right "253", Left (CxExtra "  "), Right "492"]
 
-        context "when working with bytes" $ do
-            it "works" $ api "to bytes" [Right 58, Left (CxDelim " "), Right 45, Left (CxDelim " "), Right 41] `shouldBe` Right [Right "3a", Left (CxDelim " "), Right "2d", Left (CxDelim " "), Right "29"]
+        context "when working with tokens of digits" $ do
+            it "works with bits" $
+                api "to 8 bits" [Right 1, Left (CxDelim " "), Right 2] `shouldBe` Right [Right "00000001", Left (CxDelim " "), Right "00000010"]
+            it "works with bytes" $
+                api "to bytes" [Right 58, Left (CxDelim " "), Right 45, Left (CxDelim " "), Right 41] `shouldBe` Right [Right "3a", Left (CxDelim " "), Right "2d", Left (CxDelim " "), Right "29"]
+
+        context "when working with arithmetic" $ do
+            it "can add (plus)" $
+                api "plus 42" [Right 1, Right 2] `shouldBe` Left [Right 43, Right 44]
+            it "can subtract (minus)" $
+                api "minus 100" [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
+            it "can multiply (times)" $
+                api "times 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
+            it "can mod" $
+                api "mod 9" [Right 207, Right 253, Right 492] `shouldBe` Left [Right 0, Right 1, Right 6]
+
+            it "preserves delim spaces" $
+                api "plus 1" [Right 3, Left (CxDelim " "), Right 5] `shouldBe` Left [Right 4, Left (CxDelim " "), Right 6]
+            it "preserves extra spaces" $
+                api "plus 1" [Right 3, Left (CxExtra " "), Right 5] `shouldBe` Left [Right 4, Left (CxExtra " "), Right 6]
+            it "preserves extra garbage" $
+                api "mod 10" [Right 1, Left (CxExtra "@"), Right 6677] `shouldBe` Left [Right 1, Left (CxExtra "@"), Right 7]
 
     modifyMaxSuccess (*2) $ describe "codex" $ do
         context "when working with letters" $ do
@@ -149,6 +242,9 @@ main = hspec $ do
             context "when converting from base64" $ do
                 it "works" $ codexw "base64 to chars" "YW55IGNhcm5hbCBwbGVhc3VyZQ==" `shouldBe` "any carnal pleasure"
                 it "handles weird characters" $ codexw "base64 to chars" "Pz4/Pj8+" `shouldBe` "?>?>?>"
+            it "is invertible" $
+                forAll (listOf (choose (0 :: Int,255))) (\ns ->
+                    let s = unwords (map show ns) in codexw "numbers to base64 base64 to numbers" s === s)
         context "when performing Caesar shifts" $ do
             it "works" $ do
                 codexw "shift 3" "primero" `shouldBe` "sulphur"
