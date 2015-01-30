@@ -1,6 +1,6 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE ViewPatterns #-}
-module Text.Bcodex (codex) where
+module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, parseStringCoder, parseIntCoder, codex) where
 -- imports {{{
 import Control.Arrow (left, right)
 import Control.Applicative ((<$>))
@@ -368,8 +368,11 @@ rcompose :: (CxList a -> CxList b) -> CxCoder b -> CxCoder a
 rcompose f (Left f') = Left (f' . f)
 rcompose f (Right f') = Right (f' . f)
 
-applyCxCoder :: CxCoder a -> a -> String
-applyCxCoder c = case c of
+applyCxCoder :: CxCoder a -> CxList a -> Either (CxList Int) (CxList String)
+applyCxCoder = either (Left .) (Right .)
+
+applyCxCoderToString :: CxCoder a -> a -> String
+applyCxCoderToString c = case c of
     Left f ->  concatMap (either showCxLeft show) . f . (:[]) . Right
     Right f -> concatMap (either showCxLeft id)  . f . (:[]) . Right
 -- }}}
@@ -498,5 +501,5 @@ parseIntCoder s = do
             return $ rcompose f c'
 -- }}}
 codex :: [String] -> Either String (String -> String)
-codex args = applyCxCoder <$> parseStringCoder args
+codex args = applyCxCoderToString <$> parseStringCoder args
 -- vim:set fdm=marker:

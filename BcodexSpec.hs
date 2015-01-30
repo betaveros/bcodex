@@ -7,6 +7,26 @@ import Data.Char
 
 main :: IO ()
 main = hspec $ do
+    describe "parseStringCoder" $ do
+        context "when working with letters" $ do
+            it "works" $
+                aps "alpha" [Right "abc"] `shouldBe` Left [Right 1, Right 2, Right 3]
+
+            it "accepts extras" $
+                aps "alpha" [Right "a?b%c"] `shouldBe` Left [Right 1, Left (CxExtra "?"), Right 2, Left (CxExtra "%"), Right 3]
+
+            it "does not consider spaces delimiters" $
+                aps "alpha" [Right "a b c"] `shouldBe` Left [Right 1, Left (CxExtra " "), Right 2, Left (CxExtra " "), Right 3]
+
+        context "when working with numbers" $ do
+            it "works" $
+                aps "numbers" [Right "42 13 37"] `shouldBe` Left [Right 42, Left (CxDelim " "), Right 13, Left (CxDelim " "), Right 37]
+
+        context "when working with streams of bits" $ do
+            it "works" $ aps "8 bits" [Right "001110100010110100101001"] `shouldBe` Left [Right 58, Right 45, Right 41]
+            it "takes single spaces as delimiters" $ aps "8 bits" [Right "00111010 00101101 00101001"] `shouldBe` Left [Right 58, Left (CxDelim " "), Right 45, Left (CxDelim " "), Right 41]
+            it "keeps double spaces" $ aps "8 bits" [Right "00111010  00101101  00101001"] `shouldBe` Left [Right 58, Left (CxExtra "  "), Right 45, Left (CxExtra "  "), Right 41]
+
     modifyMaxSuccess (*2) $ describe "codex" $ do
         context "when working with letters" $ do
             context "when converting to numbers" $ do
@@ -101,5 +121,6 @@ main = hspec $ do
                 forAll arbitrary (\s -> all isLetter $ codexw "filter letters" s)
             it "has no spaces after stripping" $
                 forAll arbitrary (\s -> not . any isSpace $ codexw "strip spaces" s)
-    where codexw = either error id . codex . words
+    where aps = applyCxCoder . either error id . parseStringCoder . words
+          codexw = either error id . codex . words
 
