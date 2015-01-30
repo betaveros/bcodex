@@ -83,11 +83,6 @@ delimOrShrink s = case s of
     (' ':r) | all (== ' ') r -> CxExtra r
     x -> CxExtra x
 
-forceExtraOrDelim :: CxLeft -> CxLeft
-forceExtraOrDelim (CxDelim s) = extraOrDelim s
-forceExtraOrDelim (CxExtra s) = extraOrDelim s
-forceExtraOrDelim x = x
-
 delimToExtra :: CxElem a -> CxElem a
 delimToExtra (Left (CxDelim s)) = Left (CxExtra s)
 delimToExtra x = x
@@ -347,14 +342,6 @@ translate from to = let m = Map.fromList (zip from (repeatLast to)) in \c -> fro
           repeatLast [] = error "translate with empty from string"
 -- }}}
 -- fancy string things used in parsing and in-between CxCoders {{{
-singleSpaces :: String -> String
-singleSpaces "  " = " "
-singleSpaces s = s
-
-doubleSpaces :: String -> String
-doubleSpaces " " = "  "
-doubleSpaces s = s
-
 shrinkSpaces :: String -> String
 shrinkSpaces (' ' : r@(' ':s)) | all (== ' ') s = r
 shrinkSpaces s = s
@@ -366,17 +353,10 @@ expandSpaces s = s
 mapExtraStringGroups :: (String -> String) -> CxList a -> CxList a
 mapExtraStringGroups f = mapBadStrings f . concatExtraStrings
 
-singleLeftSpaces :: CxList a -> CxList a
-singleLeftSpaces = mapExtraStringGroups singleSpaces
-doubleLeftSpaces :: CxList a -> CxList a
-doubleLeftSpaces = mapExtraStringGroups doubleSpaces
+shrinkLeftSpaces :: CxList a -> CxList a
+shrinkLeftSpaces = mapExtraStringGroups shrinkSpaces
 expandLeftSpaces :: CxList a -> CxList a
 expandLeftSpaces = mapExtraStringGroups expandSpaces
-
-readEither :: String -> Either String Int
-readEither s = case readMaybe s of
-    Just n  -> Right n
-    Nothing -> Left s
 
 readInt :: String -> Maybe Int
 readInt = readMaybe
@@ -452,7 +432,7 @@ parseCaseSynonym s = case s of
     "lowercased" -> Just toLower
     _ -> Nothing
 
-parseFilterSynonym :: String -> Maybe ((a -> Bool) -> (a -> Bool))
+parseFilterSynonym :: String -> Maybe ((a -> Bool) -> a -> Bool)
 parseFilterSynonym s = case s of
     "filter" -> Just id
     "only"   -> Just id
@@ -487,7 +467,7 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
         _ -> Left $ "Translate syntax should be 'translate _ to _', got " ++ show toKeyword
     ((parseCaseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
     (x : _) -> Left $ "Unexpected " ++ show x
-    [] -> Left $ "Unexpected end"
+    [] -> Left "Unexpected end"
 
 parseSingleIntCoder :: [String] -> Either String (CxCoder Int, [String])
 parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
@@ -495,11 +475,11 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "bit"   ) : rs) -> Right (Right $ toRadixStream 2, rs)
         ((unpl -> "nybble") : rs) -> Right (Right $ toRadixStream 16, rs)
         ((unpl -> "Nybble") : rs) -> Right (Right $ toUpperRadixStream 16, rs)
-        ((unpl -> "byte"  ) : rs) -> Right (Right $ doubleLeftSpaces . toRadixTokens 16 2, rs)
-        ((unpl -> "Byte"  ) : rs) -> Right (Right $ doubleLeftSpaces . toUpperRadixTokens 16 2, rs)
-        ((unpl -> "char"  ) : rs) -> Right (Right $ singleLeftSpaces . mapRights chrString . dropDelimiterLefts, rs)
-        ((unpl -> "alpha" ) : rs) -> Right (Right $ toAlphaStream, rs)
-        ((unpl -> "Alpha" ) : rs) -> Right (Right $ toUpperAlphaStream, rs)
+        ((unpl -> "byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toRadixTokens 16 2, rs)
+        ((unpl -> "Byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toUpperRadixTokens 16 2, rs)
+        ((unpl -> "char"  ) : rs) -> Right (Right $ shrinkLeftSpaces . mapRights chrString . dropDelimiterLefts, rs)
+        ((unpl -> "alpha" ) : rs) -> Right (Right   toAlphaStream, rs)
+        ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
         ((unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)
         ((parseBaseSynonym -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
         ("base" : (readInt -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
@@ -516,7 +496,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
     ("times" : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (* n), rs)
     ("mod"   : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (`mod` n), rs)
     (x : _) -> Left $ "Unexpected " ++ show x
-    [] -> Left $ "Unexpected end"
+    [] -> Left "Unexpected end"
 
 parseStringCoder :: [String] -> Either String (CxCoder String)
 parseStringCoder [] = Right (Right id)
