@@ -178,7 +178,7 @@ fromRadixNumbers radix
 
 toRadixNumbers :: Int -> CxList Int -> CxList String
 toRadixNumbers radix
-    = doubleLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights . dropDelimiterLefts
+    = doubleLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights
 -- }}}
 -- alpha {{{
 mod1 :: (Integral a) => a -> a -> a
