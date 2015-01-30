@@ -74,10 +74,9 @@ isDelimiter " " = True
 isDelimiter "," = True
 isDelimiter _ = False
 
-filterDelimiterLefts :: CxList b -> CxList b
-filterDelimiterLefts = map f
-    where f (Left (CxExtra s)) | isDelimiter s = Left (CxDelim s)
-          f x = x
+extraOrDelim :: String -> CxLeft
+extraOrDelim s = if isDelimiter s then CxDelim s else CxExtra s
+
 dropDelimiterLefts :: CxList b -> CxList b
 dropDelimiterLefts = filter f
     where f (Left (CxDelim _)) = False
@@ -155,7 +154,7 @@ fromRadixToken radix blockSize s
 
 fromRadixStream :: Int -> Int -> String -> CxList Int
 fromRadixStream radix blockSize s
-    = concatMap (either (\x -> [Left (CxExtra x)]) (fromRadixToken radix blockSize)) $ tokensOf (isRadixDigit radix) s
+    = concatMap (either (\x -> [Left (extraOrDelim x)]) (fromRadixToken radix blockSize)) $ tokensOf (isRadixDigit radix) s
 
 toRadixStream :: Int -> CxList Int -> CxList String
 toRadixStream radix
@@ -175,7 +174,7 @@ toUpperRadixTokens radix blockSize = mapRights (map toUpper) . toRadixTokens rad
 
 fromRadixNumbers :: Int -> String -> CxList Int
 fromRadixNumbers radix
-    = filterDelimiterLefts . map (either (Left . CxExtra) (Right . fromBaseDigits radix . map digitToInt)) . tokensOf (isRadixDigit radix)
+    = map (either (Left . extraOrDelim) (Right . fromBaseDigits radix . map digitToInt)) . tokensOf (isRadixDigit radix)
 
 toRadixNumbers :: Int -> CxList Int -> CxList String
 toRadixNumbers radix
@@ -418,9 +417,9 @@ parseFilterSynonym s = case s of
 
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s of
-    ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 1,  rs)
-    ((unpl -> "nybble") : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 1, rs)
-    ((unpl -> "byte"  ) : rs) -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 2, rs)
+    ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ fromRadixStream 2 1,  rs)
+    ((unpl -> "nybble") : rs) -> Right (wrapS2I $ fromRadixStream 16 1, rs)
+    ((unpl -> "byte"  ) : rs) -> Right (wrapS2I $ fromRadixStream 16 2, rs)
     ((unpl -> "char"  ) : rs) -> Right (wrapS2I $ map (Right . ord), rs)
     (("alpha"         ) : rs) -> Right (wrapS2I   fromAlphaStream, rs)
     ((parseBaseSynonym -> Just b) : rs) -> Right (wrapS2I $ fromRadixNumbers b, rs)
@@ -429,9 +428,9 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
         Just b -> Right (wrapS2I $ fromRadixNumbers b, rs)
     (("base64"        ) : rs) -> Right (wrapS2I   fromBase64Codex, rs)
     ((readInt -> Just n) : tokenstr : rs) -> case unpl tokenstr of
-        "bit"    -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 2 n, rs)
-        "nybble" -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 n, rs)
-        "byte"   -> Right (wrapS2I $ filterDelimiterLefts . fromRadixStream 16 (2*n), rs)
+        "bit"    -> Right (wrapS2I $ fromRadixStream 2 n, rs)
+        "nybble" -> Right (wrapS2I $ fromRadixStream 16 n, rs)
+        "byte"   -> Right (wrapS2I $ fromRadixStream 16 (2*n), rs)
         _ -> Left $ "Expecting 'bit[s]', 'byte[s]', or 'nybble[s]' after number " ++ show n ++ ", got " ++ show tokenstr
     ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
     ("shift" : (readInt -> Just n) : rs) -> Right (alphaStringCoder (+n), rs)
