@@ -32,11 +32,11 @@ mapRights = fmap . right
 mapLefts :: (Functor f) => (a -> b) -> f (Either a c) -> f (Either b c)
 mapLefts = fmap . left
 
-mapBadStrings :: (Functor f) => (String -> String) -> f (CxElem c) -> f (CxElem c)
-mapBadStrings f = fmap f'
+mapExtraStrings :: (Functor f) => (String -> String) -> f (CxElem c) -> f (CxElem c)
+mapExtraStrings f = fmap f'
     where f' (Right r) = Right r
-          f' (Left (CxBadString s)) = Left (CxBadString (f s))
-          f' (Left (CxExtra     s)) = Left (CxExtra     (f s))
+          f' (Left (CxBadString s)) = Left (CxBadString s)
+          f' (Left (CxExtra     s)) = Left (CxExtra (f s))
           f' (Left (CxDelim     s)) = Left (CxDelim s)
           f' (Left (CxBadInt i)) = Left (CxBadInt i)
 
@@ -56,6 +56,11 @@ groupRights (Right r : xs) =
     case groupRights xs of
         (Right rs : gps) -> Right (r:rs) : gps
         gps -> Right [r] : gps
+
+concatMapRights :: (b -> [Either a c]) -> [Either a b] -> [Either a c]
+concatMapRights f = concatMap ff
+    where ff (Right s) = f s
+          ff (Left x)  = [Left x]
 
 intersperseBetweenRights :: Either a b -> [Either a b] -> [Either a b]
 intersperseBetweenRights _ [] = []
@@ -192,7 +197,7 @@ fromRadixToken radix blockSize s
 
 fromRadixStream :: Int -> Int -> String -> CxList Int
 fromRadixStream radix blockSize
-    = concatMap (either ((:[]) . Left . extraOrDelim) (fromRadixToken radix blockSize)) . tokensOf (isGenDigit radix)
+    = concatMapRights (fromRadixToken radix blockSize) . mapLefts extraOrDelim . tokensOf (isGenDigit radix)
 
 toRadixStream :: Int -> CxList Int -> CxList String
 toRadixStream radix
@@ -215,14 +220,11 @@ fromRadixNumbers radix
     = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map genDigitToInt)) . tokensOf (isGenDigit radix)
 
 fromRadixNumbersCodex :: Int -> CxList String -> CxList Int
-fromRadixNumbersCodex radix = concatMap ff
-    where ff (Right s) = fromRadixNumbers radix s
-          ff (Left (CxExtra c)) = [Left (CxExtra (shrinkSpaces c))]
-          ff (Left x) = [Left x]
+fromRadixNumbersCodex radix = concatMapRights (fromRadixNumbers radix) . shrinkExtraSpaces
 
 toRadixNumbers :: Int -> CxList Int -> CxList String
 toRadixNumbers radix
-    = expandLeftSpaces . intersperseDelimSpaces . mapRights (map intToGenDigit . asBaseDigits radix)
+    = expandExtraSpaces . intersperseDelimSpaces . mapRights (map intToGenDigit . asBaseDigits radix)
 -- }}}
 -- alpha {{{
 mod1 :: (Integral a) => a -> a -> a
@@ -261,9 +263,7 @@ fromAlphaStream :: String -> CxList Int
 fromAlphaStream = map alphaToElem
 
 fromAlphaStreamCodex :: CxList String -> CxList Int
-fromAlphaStreamCodex = concatExtraStrings . concatMap ff . concatExtraStrings
-    where ff (Right s) = fromAlphaStream s
-          ff (Left x) = [Left x]
+fromAlphaStreamCodex = concatExtraStrings . concatMapRights fromAlphaStream
 
 toAlphaStream :: CxList Int -> CxList String
 toAlphaStream = bindRights intToAlphaString . crunchDelimiterLefts
@@ -330,7 +330,7 @@ toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
         ensureBase64 x = if 0 <= x && x < 256 then Right x else Left . CxBadInt $ x
 
 fromBase64Codex :: String -> CxList Int
-fromBase64Codex = mapLefts CxBadString . ungroupRights . mapRights fromBase64 . tokensOf isBase64Char
+fromBase64Codex = mapLefts CxBadString . concatMapRights (map Right . fromBase64) . tokensOf isBase64Char
 -- }}}
 -- morse {{{
 morseTable :: [(Char, String)]
@@ -357,9 +357,7 @@ fromMorse s = case Map.lookup s fromMorseMap of
     Nothing -> Left $ CxBadString s
 
 fromMorseCodex :: CxList String -> CxList String
-fromMorseCodex = mapRights (:[]) . bindRights fromMorse . crunchMorseDelimiterLefts . concatMap ff
-    where ff (Right s) = mapLefts CxExtra . tokensOf (`elem` ".-") $ s
-          ff (Left c) = [Left c]
+fromMorseCodex = mapRights (:[]) . bindRights fromMorse . crunchMorseDelimiterLefts . concatMapRights (mapLefts CxExtra . tokensOf (`elem` ".-"))
 -- }}}
 -- translate {{{
 translate :: String -> String -> Char -> Char
@@ -378,10 +376,13 @@ expandSpaces r@(' ' : s) | all (== ' ') s = ' ' : r
 expandSpaces s = s
 
 mapExtraStringGroups :: (String -> String) -> CxList a -> CxList a
-mapExtraStringGroups f = mapBadStrings f . concatExtraStrings
+mapExtraStringGroups f = mapExtraStrings f . concatExtraStrings
 
-expandLeftSpaces :: CxList a -> CxList a
-expandLeftSpaces = mapExtraStringGroups expandSpaces
+shrinkExtraSpaces :: CxList a -> CxList a
+shrinkExtraSpaces = mapExtraStringGroups shrinkSpaces
+
+expandExtraSpaces :: CxList a -> CxList a
+expandExtraSpaces = mapExtraStringGroups expandSpaces
 
 readInt :: String -> Maybe Int
 readInt = readMaybe
@@ -392,11 +393,6 @@ unpl s = fromMaybe s $ unpluralize s
 -- }}}
 -- CxCoders {{{
 type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList String)
-
-wrapS2I :: (String -> CxList Int) -> CxCoder String
-wrapS2I f = Left $ \cxl -> concatMap ff cxl
-    where ff (Right s) = f s
-          ff (Left c) = [Left c]
 
 unpluralize :: String -> Maybe String
 unpluralize s = case last s of
@@ -475,9 +471,9 @@ expectNumberMeaningAfter m s t = case readInt t of
 
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s of
-    ((parseRadixTokenSynonym -> Right (r, a)) : rs) -> Right (wrapS2I $ fromRadixStream r a, rs)
+    ((parseRadixTokenSynonym -> Right (r, a)) : rs) -> Right (Left . concatMapRights $ fromRadixStream r a, rs)
     ((readInt -> Just n) : tokenstr : rs) -> case parseRadixTokenSynonym tokenstr of
-        Right (r, a) -> Right (wrapS2I $ fromRadixStream r (a*n), rs)
+        Right (r, a) -> Right (Left . concatMapRights $ fromRadixStream r (a*n), rs)
         Left e -> Left $ e ++ " after number " ++ show n ++ ", got " ++ show tokenstr
 
     ((parseBaseSynonym -> Just b) : rs) -> Right (Left $ fromRadixNumbersCodex b, rs)
@@ -485,8 +481,8 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
         b <- expectNumberMeaningAfter "radix" "base" bstr
         Right (Left $ fromRadixNumbersCodex b, rs)
 
-    ((unpl -> "char") : rs) -> Right (wrapS2I $ map (Right . ord), rs)
-    ("base64" : rs) -> Right (wrapS2I   fromBase64Codex, rs)
+    ((unpl -> "char") : rs) -> Right (Left . concatMapRights $ map (Right . ord), rs)
+    ("base64" : rs) -> Right (Left . concatMapRights $ fromBase64Codex, rs)
 
     ("alpha" : rs) -> Right (Left fromAlphaStreamCodex, rs)
     ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
@@ -520,8 +516,8 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "bit"   ) : rs) -> Right (Right $ toRadixStream 2, rs)
         ((unpl -> "nybble") : rs) -> Right (Right $ toRadixStream 16, rs)
         ((unpl -> "Nybble") : rs) -> Right (Right $ toUpperRadixStream 16, rs)
-        ((unpl -> "byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toRadixTokens 16 2, rs)
-        ((unpl -> "Byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toUpperRadixTokens 16 2, rs)
+        ((unpl -> "byte"  ) : rs) -> Right (Right $ expandExtraSpaces . toRadixTokens 16 2, rs)
+        ((unpl -> "Byte"  ) : rs) -> Right (Right $ expandExtraSpaces . toUpperRadixTokens 16 2, rs)
 
         ((unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)
         ((parseBaseSynonym -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
