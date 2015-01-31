@@ -167,6 +167,15 @@ main = hspec $ do
         context "when working with streams of digits" $ do
             it "works with bits" $
                 api "to bits" [Right 1, Right 0] `shouldBe` Right [Right "1", Right "0"]
+            it "works with nybbles" $
+                api "to nybbles" [Right 12, Right 0, Right 13, Right 14] `shouldBe` Right [Right "c", Right "0", Right "d", Right "e"]
+            it "works with Nybbles" $
+                api "to Nybbles" [Right 12, Right 0, Right 13, Right 14] `shouldBe` Right [Right "C", Right "0", Right "D", Right "E"]
+
+            it "eliminates small delimiter spaces" $
+                api "to nybbles" [Right 7, Left (CxDelim " "), Right 15] `shouldBe` Right [Right "7", Right "f"]
+            it "eliminates small delimiter commas" $
+                api "to nybbles" [Right 7, Left (CxDelim ","), Right 15] `shouldBe` Right [Right "7", Right "f"]
 
         context "when working with tokens of digits" $ do
             it "works with bits" $

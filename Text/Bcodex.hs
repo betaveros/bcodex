@@ -91,10 +91,6 @@ delimOrShrink s = case s of
     (' ':r) | all (== ' ') r -> CxExtra r
     x -> CxExtra x
 
-delimToExtra :: CxElem a -> CxElem a
-delimToExtra (Left (CxDelim s)) = Left (CxExtra s)
-delimToExtra x = x
-
 dropDelimiterLefts :: CxList b -> CxList b
 dropDelimiterLefts = mapMaybe f
     where f (Left (CxDelim s)) =
@@ -197,7 +193,7 @@ fromRadixStream radix blockSize s
 
 toRadixStream :: Int -> CxList Int -> CxList String
 toRadixStream radix
-    = map (delimToExtra . fmap intToRadixDigitString . (asSingleBaseDigit radix =<<))
+    = map (fmap intToRadixDigitString . (asSingleBaseDigit radix =<<)) . dropDelimiterLefts
 toUpperRadixStream :: Int -> CxList Int -> CxList String
 toUpperRadixStream radix = mapRights (map toUpper) . toRadixStream radix
 
