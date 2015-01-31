@@ -380,8 +380,6 @@ expandSpaces s = s
 mapExtraStringGroups :: (String -> String) -> CxList a -> CxList a
 mapExtraStringGroups f = mapBadStrings f . concatExtraStrings
 
-shrinkLeftSpaces :: CxList a -> CxList a
-shrinkLeftSpaces = mapExtraStringGroups shrinkSpaces
 expandLeftSpaces :: CxList a -> CxList a
 expandLeftSpaces = mapExtraStringGroups expandSpaces
 
@@ -499,7 +497,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "Nybble") : rs) -> Right (Right $ toUpperRadixStream 16, rs)
         ((unpl -> "byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toRadixTokens 16 2, rs)
         ((unpl -> "Byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toUpperRadixTokens 16 2, rs)
-        ((unpl -> "char"  ) : rs) -> Right (Right $ shrinkLeftSpaces . mapRights chrString . crunchDelimiterLefts, rs)
+        ((unpl -> "char"  ) : rs) -> Right (Right $ mapRights chrString . crunchDelimiterLefts, rs)
         ((unpl -> "alpha" ) : rs) -> Right (Right   toAlphaStream, rs)
         ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
         ((unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)

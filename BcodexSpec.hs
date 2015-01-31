@@ -141,6 +141,16 @@ main = hspec $ do
             it "preserves extra spaces" $ do
                 api "to alpha" [Left (CxExtra "  ")] `shouldBe` Right [Left (CxExtra "  ")]
 
+        context "when working with chars" $ do
+            it "works" $ api "to chars" [Right 0x38, Right 0x76, Right 0x29] `shouldBe` Right [Right "8", Right "v", Right ")"]
+
+            it "eliminates small delimiters" $ api "to chars" [Right 0x3a, Left (CxDelim " "), Right 0x44] `shouldBe` Right [Right ":", Right "D"]
+            it "shrinks spaces" $ do
+                api "to chars" [Left (CxDelim "  ")] `shouldBe` Right [Left (CxExtra " ")]
+                api "to chars" [Right 0x3e, Left (CxDelim "  "), Right 0x3c] `shouldBe` Right [Right ">", Left (CxExtra " "), Right "<"]
+            it "preserves extra spaces" $ do
+                api "to chars" [Left (CxExtra "  ")] `shouldBe` Right [Left (CxExtra "  ")]
+
         context "when working with numbers" $ do
             it "works" $
                 api "to numbers" [Right 253] `shouldBe` Right [Right "253"]
@@ -268,6 +278,7 @@ main = hspec $ do
             context "when converting to characters" $ do
                 it "can convert bytes to chars" $ codexw "bytes to chars" "3a 2D 29" `shouldBe` ":-)"
                 it "works with spaces" $ codexw "bytes to chars" "3a 2D 29  3A 2d 28" `shouldBe` ":-) :-("
+                it "shrinks spaces" $ codexw "bytes to chars" "2a   2a    2a 2a     2a" `shouldBe` "*  *   **    *"
                 it "works with garbage" $ codexw "bytes to chars" "[3a 2D 29]" `shouldBe` "[:-)]"
                 it "can convert numbers to chars" $ codexw "numbers to chars" "58 45 41" `shouldBe` ":-)"
                 it "can convert numbers to chars with spaces" $ codexw "numbers to chars" "58 45 41  58 45 40" `shouldBe` ":-) :-("
