@@ -35,10 +35,8 @@ mapLefts = fmap . left
 mapExtraStrings :: (Functor f) => (String -> String) -> f (CxElem c) -> f (CxElem c)
 mapExtraStrings f = fmap f'
     where f' (Right r) = Right r
-          f' (Left (CxBadString s)) = Left (CxBadString s)
-          f' (Left (CxExtra     s)) = Left (CxExtra (f s))
-          f' (Left (CxDelim     s)) = Left (CxDelim s)
-          f' (Left (CxBadInt i)) = Left (CxBadInt i)
+          f' (Left (CxExtra s)) = Left (CxExtra (f s))
+          f' (Left x) = Left x
 
 bindRights :: (Functor f) => (a -> Either c b) -> f (Either c a) -> f (Either c b)
 bindRights = fmap . (=<<)
@@ -274,7 +272,7 @@ toUpperAlphaStream = bindRights intToUpperAlphaString . crunchDelimiterLefts
 -- base 64 {{{
 toBase64Char :: Int -> Char
 toBase64Char x
-    | 0 <= x && x < 26 = chr (ord 'A' + x)
+    |  0 <= x && x < 26 = chr (ord 'A' + x)
     | 26 <= x && x < 52 = chr (ord 'a' + x - 26)
     | 52 <= x && x < 62 = chr (ord '0' + x - 52)
     | x == 62 = '+'
@@ -309,8 +307,8 @@ to64Fragments n = reverse . take n . map toBase64Char . chunkStream 6
 toBase64 :: [Int] -> String
 toBase64 [] = ""
 toBase64 (x1:x2:x3:xs) = to64Fragments 4 (                packChunks 8 [x3,x2,x1]) ++ toBase64 xs
-toBase64 [x1,x2]       = to64Fragments 3 (flip shiftL 2 $ packChunks 8    [x2,x1]) ++ "="
-toBase64 [x1]          = to64Fragments 2 (flip shiftL 4 $ packChunks 8       [x1]) ++ "=="
+toBase64 [x1,x2]       = to64Fragments 3 (flip shiftL 2 $ packChunks 8 [   x2,x1]) ++ "="
+toBase64 [x1]          = to64Fragments 2 (flip shiftL 4 $ packChunks 8 [      x1]) ++ "=="
 
 toNBytes :: (Bits a, Num a) => Int -> a -> [a]
 toNBytes n = reverse . take n . chunkStream 8
@@ -319,22 +317,35 @@ fromBase64 :: String -> [Int]
 fromBase64 "" = []
 fromBase64 (c1:c2:c3:c4:cs) = bytes ++ fromBase64 cs
     where bytes
-           | c3 == '=' && c4 == '=' = toNBytes 1 $ flip shiftR 4 $ packChunks 6 $ map fromBase64Char [c2,c1]
+           | c3 == '=' && c4 == '='
+                       = toNBytes 1 $ flip shiftR 4 $ packChunks 6 $ map fromBase64Char [c2,c1]
            | c4 == '=' = toNBytes 2 $ flip shiftR 2 $ packChunks 6 $ map fromBase64Char [c3,c2,c1]
            | otherwise = toNBytes 3 $                 packChunks 6 $ map fromBase64Char [c4,c3,c2,c1]
 fromBase64 _ = error "base-64 has wrong number of characters"
 
 toBase64Codex :: CxList Int -> CxList String
 toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
-    where
-        ensureBase64 x = if 0 <= x && x < 256 then Right x else Left . CxBadInt $ x
+    where ensureBase64 x = if 0 <= x && x < 256 then Right x
+                                                else Left . CxBadInt $ x
 
 fromBase64Codex :: String -> CxList Int
 fromBase64Codex = mapLefts CxBadString . concatMapRights (map Right . fromBase64) . tokensOf isBase64Char
 -- }}}
 -- morse {{{
 morseTable :: [(Char, String)]
-morseTable = [ ('a', ".-"), ('b', "-..."), ('c', "-.-."), ('d', "-.."), ('e', "."), ('f', "..-."), ('g', "--."), ('h', "...."), ('i', ".."), ('j', ".---"), ('k', "-.-"), ('l', ".-.."), ('m', "--"), ('n', "-."), ('o', "---"), ('p', ".--."), ('q', "--.-"), ('r', ".-."), ('s', "..."), ('t', "-"), ('u', "..-"), ('v', "...-"), ('w', ".--"), ('x', "-..-"), ('y', "-.--"), ('z', "--.."), ('0', "-----"), ('1', ".----"), ('2', "..---"), ('3', "...--"), ('4', "....-"), ('5', "....."), ('6', "-...."), ('7', "--..."), ('8', "---.."), ('9', "----."), (',', "--..--"), ('.', ".-.-.-"), ('?', "..--.."), (';', "-.-.-."), (':', "---..."), ('\'', ".----."), ('-', "-....-"), ('/', "-..-."), ('(', "-.--."), (')', "-.--.-"), ('_', "..--.-") ]
+morseTable =
+    [ ('a', ".-"), ('b', "-..."), ('c', "-.-."), ('d', "-.."), ('e', ".")
+    , ('f', "..-."), ('g', "--."), ('h', "...."), ('i', ".."), ('j', ".---")
+    , ('k', "-.-"), ('l', ".-.."), ('m', "--"), ('n', "-."), ('o', "---")
+    , ('p', ".--."), ('q', "--.-"), ('r', ".-."), ('s', "..."), ('t', "-")
+    , ('u', "..-"), ('v', "...-"), ('w', ".--"), ('x', "-..-"), ('y', "-.--")
+    , ('z', "--..")
+    , ('0', "-----"), ('1', ".----"), ('2', "..---"), ('3', "...--"), ('4', "....-")
+    , ('5', "....."), ('6', "-...."), ('7', "--..."), ('8', "---.."), ('9', "----.")
+    , (',', "--..--"), ('.', ".-.-.-"), ('?', "..--.."), (';', "-.-.-.")
+    , (':', "---..."), ('\'', ".----."), ('-', "-....-"), ('/', "-..-.")
+    , ('(', "-.--."), (')', "-.--.-"), ('_', "..--.-")
+    ]
 
 toMorseMap :: Map.Map Char String
 toMorseMap = Map.fromList morseTable
@@ -542,29 +553,18 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
     (x : _) -> Left $ "Unexpected " ++ show x
     [] -> Left "Unexpected end"
 
+parseCoderAfter :: CxCoder a -> [String] -> Either String (CxCoder a)
+parseCoderAfter c rs = case c of
+    Left  f -> rcompose f <$> parseIntCoder rs
+    Right f -> rcompose f <$> parseStringCoder rs
+
 parseStringCoder :: [String] -> Either String (CxCoder String)
 parseStringCoder [] = Right (Right id)
-parseStringCoder s = do
-    (c, rs) <- parseSingleStringCoder s
-    case c of
-        Left f -> do
-            c' <- parseIntCoder rs
-            return $ rcompose f c'
-        Right f -> do
-            c' <- parseStringCoder rs
-            return $ rcompose f c'
+parseStringCoder s = parseSingleStringCoder s >>= uncurry parseCoderAfter
 
 parseIntCoder :: [String] -> Either String (CxCoder Int)
 parseIntCoder [] = Right (Left id)
-parseIntCoder s = do
-    (c, rs) <- parseSingleIntCoder s
-    case c of
-        Left f -> do
-            c' <- parseIntCoder rs
-            return $ rcompose f c'
-        Right f -> do
-            c' <- parseStringCoder rs
-            return $ rcompose f c'
+parseIntCoder s = parseSingleIntCoder s >>= uncurry parseCoderAfter
 -- }}}
 codex :: [String] -> Either String (String -> String)
 codex args = applyCxCoderToString <$> parseStringCoder args
