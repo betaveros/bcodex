@@ -5,7 +5,7 @@ module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, parseStri
 import Control.Arrow (left, right)
 import Control.Applicative ((<$>))
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
-import Data.Char (intToDigit, isAlpha, isLetter, isSpace, chr, ord, toUpper, toLower)
+import Data.Char (isAlpha, isLetter, isSpace, chr, ord, toUpper, toLower)
 import Data.Function (on)
 import Data.List (unfoldr, groupBy)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -126,8 +126,8 @@ mapAllStrings f = map f'
 str1 :: Char -> String
 str1 c = [c]
 
-intToDigitString :: Int -> String
-intToDigitString = str1 . intToDigit
+intToRadixDigitString :: Int -> String
+intToRadixDigitString = str1 . intToRadixDigit
 
 chrString :: Int -> String
 chrString = str1 . chr
@@ -176,6 +176,11 @@ radixDigitToInt ch
     | Just n <- alphaToInt ch = n + 9
     | otherwise = error $ "radixDigitToInt failed, unexpected char " ++ show ch
 
+intToRadixDigit :: Int -> Char
+intToRadixDigit n
+    | n <= 9 = chr (ord '0' + n)
+    | otherwise = chr (ord 'a' + n - 10)
+
 splitInto :: Int -> [a] -> [[a]]
 splitInto n = takeWhile (not . null) . unfoldr (Just . splitAt n)
 
@@ -192,17 +197,17 @@ fromRadixStream radix blockSize s
 
 toRadixStream :: Int -> CxList Int -> CxList String
 toRadixStream radix
-    = map (delimToExtra . fmap intToDigitString . (asSingleBaseDigit radix =<<))
+    = map (delimToExtra . fmap intToRadixDigitString . (asSingleBaseDigit radix =<<))
 toUpperRadixStream :: Int -> CxList Int -> CxList String
 toUpperRadixStream radix = mapRights (map toUpper) . toRadixStream radix
 
 toRadixToken :: Int -> Int -> Int -> CxElem String
 toRadixToken radix blockSize =
-    fmap (map intToDigit) . asBaseDigitsSized radix blockSize
+    fmap (map intToRadixDigit) . asBaseDigitsSized radix blockSize
 
 toRadixTokens :: Int -> Int -> CxList Int -> CxList String
 toRadixTokens radix blockSize
-    = mapRights unwords . groupRights . bindRights (toRadixToken radix blockSize)
+    = intersperseBetweenRights (Left (CxDelim " ")) . bindRights (toRadixToken radix blockSize)
 toUpperRadixTokens :: Int -> Int -> CxList Int -> CxList String
 toUpperRadixTokens radix blockSize = mapRights (map toUpper) . toRadixTokens radix blockSize
 
@@ -218,7 +223,7 @@ fromRadixNumbersCodex radix = concatMap ff
 
 toRadixNumbers :: Int -> CxList Int -> CxList String
 toRadixNumbers radix
-    = expandLeftSpaces . mapRights (unwords . map (map intToDigit . asBaseDigits radix)) . groupRights
+    = expandLeftSpaces . intersperseBetweenRights (Left (CxDelim " ")) . mapRights (map intToRadixDigit . asBaseDigits radix)
 -- }}}
 -- alpha {{{
 mod1 :: (Integral a) => a -> a -> a

@@ -32,6 +32,7 @@ main = hspec $ do
             it "works" $ do
                 aps "numbers" [Right "42 13 37"] `shouldBe` Left [Right 42, Left (CxDelim " "), Right 13, Left (CxDelim " "), Right 37]
                 aps "decimal" [Right "42 13 37"] `shouldBe` Left [Right 42, Left (CxDelim " "), Right 13, Left (CxDelim " "), Right 37]
+
             it "works with hexadecimal" $ do
                 aps "hex" [Right "10 20 30"] `shouldBe` Left [Right 16, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 48]
                 aps "hexadecimal" [Right "10 20 30"] `shouldBe` Left [Right 16, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 48]
@@ -46,10 +47,21 @@ main = hspec $ do
                 aps "base 13" [Right "10 26 100"] `shouldBe` Left [Right 13, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 169]
                 aps "base 36" [Right "darn"] `shouldBe` Left [Right 620483]
 
+            it "accepts commas as delimiters" $ do
+                aps "numbers" [Right "42,13,37"] `shouldBe` Left [Right 42, Left (CxDelim ","), Right 13, Left (CxDelim ","), Right 37]
+            it "does not accept double commas as delimiters" $ do
+                aps "numbers" [Right "42,,13,,37"] `shouldBe` Left [Right 42, Left (CxExtra ",,"), Right 13, Left (CxExtra ",,"), Right 37]
+            it "does not accept other garbage as delimiters" $ do
+                aps "numbers" [Right "42;13.37"] `shouldBe` Left [Right 42, Left (CxExtra ";"), Right 13, Left (CxExtra "."), Right 37]
+                aps "numbers" [Right "207/253=492"] `shouldBe` Left [Right 207, Left (CxExtra "/"), Right 253, Left (CxExtra "="), Right 492]
             it "shrinks spaces to be extras" $ do
                 aps "numbers" [Right "42  13   37"] `shouldBe` Left [Right 42, Left (CxExtra " "), Right 13, Left (CxExtra "  "), Right 37]
                 aps "numbers" [Right "  "] `shouldBe` Left [Left (CxExtra " ")]
 
+            it "preserves delimiters" $ do
+                aps "numbers" [Left (CxDelim " ")] `shouldBe` Left [Left (CxDelim " ")]
+                aps "numbers" [Left (CxDelim ",")] `shouldBe` Left [Left (CxDelim ",")]
+                aps "numbers" [Left (CxDelim "  ")] `shouldBe` Left [Left (CxDelim "  ")]
             it "shrinks extras" $ do
                 aps "numbers" [Left (CxExtra "  ")] `shouldBe` Left [Left (CxExtra " ")]
 
@@ -133,17 +145,37 @@ main = hspec $ do
             it "works" $
                 api "to numbers" [Right 253] `shouldBe` Right [Right "253"]
 
+            it "works with binary" $ do
+                api "to binary" [Right 253] `shouldBe` Right [Right "11111101"]
+                api "to bin" [Right 492] `shouldBe` Right [Right "111101100"]
+            it "works with hex" $ do
+                api "to hexadecimal" [Right 105] `shouldBe` Right [Right "69"]
+                api "to hex" [Right 255] `shouldBe` Right [Right "ff"]
+            it "works with base 36" $
+                api "to base 36" [Right 620483] `shouldBe` Right [Right "darn"]
+
+            it "adds delim spaces" $
+                api "to numbers" [Right 253, Right 492] `shouldBe` Right [Right "253", Left (CxDelim " "), Right "492"]
             it "preserves delim spaces" $
                 api "to numbers" [Right 253, Left (CxDelim " "), Right 492] `shouldBe` Right [Right "253", Left (CxDelim " "), Right "492"]
+            it "preserves delim commas" $
+                api "to numbers" [Right 253, Left (CxDelim ","), Right 492] `shouldBe` Right [Right "253", Left (CxDelim ","), Right "492"]
 
             it "expands extra spaces" $
                 api "to numbers" [Right 253, Left (CxExtra " "), Right 492] `shouldBe` Right [Right "253", Left (CxExtra "  "), Right "492"]
+
+        context "when working with streams of digits" $ do
+            it "works with bits" $
+                api "to bits" [Right 1, Right 0] `shouldBe` Right [Right "1", Right "0"]
 
         context "when working with tokens of digits" $ do
             it "works with bits" $
                 api "to 8 bits" [Right 1, Left (CxDelim " "), Right 2] `shouldBe` Right [Right "00000001", Left (CxDelim " "), Right "00000010"]
             it "works with bytes" $
                 api "to bytes" [Right 58, Left (CxDelim " "), Right 45, Left (CxDelim " "), Right 41] `shouldBe` Right [Right "3a", Left (CxDelim " "), Right "2d", Left (CxDelim " "), Right "29"]
+
+            it "adds delim spaces" $
+                api "to 8 bits" [Right 1, Right 2] `shouldBe` Right [Right "00000001", Left (CxDelim " "), Right "00000010"]
 
         context "when working with arithmetic" $ do
             it "can add (plus)" $
