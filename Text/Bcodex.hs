@@ -419,6 +419,13 @@ applyCxCoderToString c = case c of
     Right f -> concatMap (either showCxLeft id)  . f . (:[]) . Right
 -- }}}
 -- parsing command line args (synonyms etc.) {{{
+parseRadixTokenSynonym :: String -> Either String (Int, Int)
+parseRadixTokenSynonym s = case unpl s of
+    "bit"    -> Right (2, 1)
+    "nybble" -> Right (16, 1)
+    "byte"   -> Right (16, 2)
+    _        -> Left "Expecting 'bit[s]', 'byte[s]', or 'nybble[s]'"
+
 parseCharClass :: String -> Maybe (Char -> Bool)
 parseCharClass s = case s of
     "space"      -> Just isSpace
@@ -460,34 +467,52 @@ parseFilterSynonym s = case s of
     "drop"   -> Just (not .)
     _        -> Nothing
 
+
+expectNumberMeaningAfter :: String -> String -> String -> Either String Int
+expectNumberMeaningAfter m s t = case readInt t of
+    Just n -> Right n
+    Nothing -> Left $ "Expecting number (" ++ m ++ ") after '" ++ s ++ "', got unexpected " ++ show t
+
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s of
-    ((unpl -> "bit"   ) : rs) -> Right (wrapS2I $ fromRadixStream 2 1,  rs)
-    ((unpl -> "nybble") : rs) -> Right (wrapS2I $ fromRadixStream 16 1, rs)
-    ((unpl -> "byte"  ) : rs) -> Right (wrapS2I $ fromRadixStream 16 2, rs)
-    ((unpl -> "char"  ) : rs) -> Right (wrapS2I $ map (Right . ord), rs)
-    (("alpha"         ) : rs) -> Right (Left fromAlphaStreamCodex, rs)
+    ((parseRadixTokenSynonym -> Right (r, a)) : rs) -> Right (wrapS2I $ fromRadixStream r a, rs)
+    ((readInt -> Just n) : tokenstr : rs) -> case parseRadixTokenSynonym tokenstr of
+        Right (r, a) -> Right (wrapS2I $ fromRadixStream r (a*n), rs)
+        Left e -> Left $ e ++ " after number " ++ show n ++ ", got " ++ show tokenstr
+
     ((parseBaseSynonym -> Just b) : rs) -> Right (Left $ fromRadixNumbersCodex b, rs)
-    ("base" : bstr : rs) -> case readInt bstr of
-        Nothing -> Left $ "Unexpected " ++ show bstr ++ " after 'base' (expecting integer)"
-        Just b -> Right (Left $ fromRadixNumbersCodex b, rs)
-    (("base64"        ) : rs) -> Right (wrapS2I   fromBase64Codex, rs)
-    ((readInt -> Just n) : tokenstr : rs) -> case unpl tokenstr of
-        "bit"    -> Right (wrapS2I $ fromRadixStream 2 n, rs)
-        "nybble" -> Right (wrapS2I $ fromRadixStream 16 n, rs)
-        "byte"   -> Right (wrapS2I $ fromRadixStream 16 (2*n), rs)
-        _ -> Left $ "Expecting 'bit[s]', 'byte[s]', or 'nybble[s]' after number " ++ show n ++ ", got " ++ show tokenstr
+    ("base" : bstr : rs) -> do
+        b <- expectNumberMeaningAfter "radix" "base" bstr
+        Right (Left $ fromRadixNumbersCodex b, rs)
+
+    ((unpl -> "char") : rs) -> Right (wrapS2I $ map (Right . ord), rs)
+    ("base64" : rs) -> Right (wrapS2I   fromBase64Codex, rs)
+
+    ("alpha" : rs) -> Right (Left fromAlphaStreamCodex, rs)
     ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
-    ("shift" : (readInt -> Just n) : rs) -> Right (alphaStringCoder (+n), rs)
-    ("morse" : rs)        -> Right (Right fromMorseCodex, rs)
+    ("shift" : a : rs) -> do
+        n <- expectNumberMeaningAfter "shift amount" "shift" a
+        return (alphaStringCoder (+n), rs)
+
+    (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
+
     ((parseFilterSynonym -> Just f) : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (f p), rs)
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of
         "to" -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
         _ -> Left $ "Translate syntax should be 'translate _ to _', got " ++ show toKeyword
     ((parseCaseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
+
     (x : _) -> Left $ "Unexpected " ++ show x
     [] -> Left "Unexpected end"
+
+parseArithmeticOperation :: String -> Maybe (Int -> Int -> Int)
+parseArithmeticOperation s = case s of
+    "plus"  -> Just (+)
+    "minus" -> Just subtract
+    "times" -> Just (*)
+    "mod"   -> Just (flip mod)
+    _ -> Nothing
 
 parseSingleIntCoder :: [String] -> Either String (CxCoder Int, [String])
 parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
@@ -497,24 +522,27 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "Nybble") : rs) -> Right (Right $ toUpperRadixStream 16, rs)
         ((unpl -> "byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toRadixTokens 16 2, rs)
         ((unpl -> "Byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toUpperRadixTokens 16 2, rs)
-        ((unpl -> "char"  ) : rs) -> Right (Right $ mapRights chrString . crunchDelimiterLefts, rs)
-        ((unpl -> "alpha" ) : rs) -> Right (Right   toAlphaStream, rs)
-        ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
+
         ((unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)
         ((parseBaseSynonym -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
         ("base" : (readInt -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
+
+        ((unpl -> "char"  ) : rs) -> Right (Right $ mapRights chrString . crunchDelimiterLefts, rs)
+
+        ((unpl -> "alpha" ) : rs) -> Right (Right   toAlphaStream, rs)
+        ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
+
         ((unpl -> "base64") : rs) -> Right (Right   toBase64Codex, rs)
-        ((readInt -> Just n) : tokenstr : rs) -> case unpl tokenstr of
-            "bit"    -> Right (Right $ toRadixTokens 2 n, rs)
-            "nybble" -> Right (Right $ toRadixTokens 16 n, rs)
-            "byte"   -> Right (Right $ toRadixTokens 16 (2*n), rs)
-            _ -> Left $ "Expecting 'bit[s]', 'byte[s]', or 'nybble[s]' after 'to' number " ++ show n ++ ", got " ++ show tokenstr
+        ((readInt -> Just n) : tokenstr : rs) -> case parseRadixTokenSynonym tokenstr of
+            Right (r, a) -> Right (Right $ toRadixTokens r (a*n), rs)
+            Left e -> Left $ e ++ " after 'to' number " ++ show n ++ ", got " ++ show tokenstr
         (x : _) -> Left $ "Unexpected " ++ x ++ " after 'to'"
         [] -> Left "Unexpected end after 'to'"
-    ("plus"  : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (+ n), rs)
-    ("minus" : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ subtract n, rs)
-    ("times" : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (* n), rs)
-    ("mod"   : (readInt -> Just n) : rs) -> Right (Left . fmap . fmap $ (`mod` n), rs)
+
+    (ostr@(parseArithmeticOperation -> Just o) : nstr : rs) -> do
+        n <- expectNumberMeaningAfter "operand" ostr nstr
+        Right (Left . fmap . fmap $ o n, rs)
+
     (x : _) -> Left $ "Unexpected " ++ show x
     [] -> Left "Unexpected end"
 
