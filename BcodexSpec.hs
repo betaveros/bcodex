@@ -111,6 +111,10 @@ main = hspec $ do
                 aps "to morse" [Right "orz"] `shouldBe` Right [Right "---", Left (CxDelim " "), Right ".-.", Left (CxDelim " "), Right "--.."]
             it "can convert to weird morse" $
                 aps "to morse" [Right "8v)"] `shouldBe` Right [Right "---..", Left (CxDelim " "), Right "...-", Left (CxDelim " "), Right "-.--.-"]
+            it "produces ' / ' extras" $
+                aps "to morse" [Right "a ok"] `shouldBe` Right [Right ".-", Left (CxExtra " / "), Right "---", Left (CxDelim " "), Right "-.-"]
+            it "produces ' / ' extras from delimiters" $
+                aps "to morse" [Right "g", Left (CxDelim " "), Right "g"] `shouldBe` Right [Right "--.", Left (CxExtra " / "), Right "--."]
 
         context "when working with shifts" $ do
             it "works" $

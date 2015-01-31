@@ -350,14 +350,19 @@ morseTable =
 toMorseMap :: Map.Map Char String
 toMorseMap = Map.fromList morseTable
 
+morseSpace :: CxLeft
+morseSpace = CxExtra " / "
+
 toMorse :: Char -> CxElem String
-toMorse ' ' = Left $ CxExtra " / "
+toMorse ' ' = Left morseSpace
 toMorse c = case Map.lookup (toLower c) toMorseMap of
     Just s -> Right s
     Nothing -> Left $ CxExtra [c]
 
 toMorseCodex :: CxList String -> CxList String
-toMorseCodex = intersperseDelimSpaces . bindRights toMorse . ungroupRights
+toMorseCodex = intersperseDelimSpaces . mapLefts f . bindRights toMorse . ungroupRights
+    where f (CxDelim " ") = morseSpace
+          f x = x
 
 fromMorseMap :: Map.Map String Char
 fromMorseMap = Map.fromList $ map swap morseTable
