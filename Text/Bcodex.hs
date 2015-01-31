@@ -64,6 +64,8 @@ intersperseBetweenRights b (Right r : xs) =
     case intersperseBetweenRights b xs of
         (Right rs : gps) -> Right r : b : Right rs : gps
         gps -> Right r : gps
+intersperseDelimSpaces :: CxList a -> CxList a
+intersperseDelimSpaces = intersperseBetweenRights $ Left (CxDelim " ")
 
 concatExtraStrings :: CxList a -> CxList a
 concatExtraStrings [] = []
@@ -91,8 +93,8 @@ delimOrShrink s = case s of
     (' ':r) | all (== ' ') r -> CxExtra r
     x -> CxExtra x
 
-dropDelimiterLefts :: CxList b -> CxList b
-dropDelimiterLefts = mapMaybe f
+crunchDelimiterLefts :: CxList b -> CxList b
+crunchDelimiterLefts = mapMaybe f
     where f (Left (CxDelim s)) =
             case s of
                 "" -> Nothing
@@ -118,15 +120,40 @@ mapAllStrings f = map f'
           f' (Right s) = Right (f s)
           f' x = x
 -- }}}
--- utilities to get strings {{{
+-- list/string/character/digit utilities {{{
 str1 :: Char -> String
 str1 c = [c]
 
-intToRadixDigitString :: Int -> String
-intToRadixDigitString = str1 . intToRadixDigit
-
 chrString :: Int -> String
 chrString = str1 . chr
+
+tokensOf :: (a -> Bool) -> [a] -> [Either [a] [a]]
+tokensOf p ls
+    = mapLeftRight (p . head) $ groupBy ((==) `on` p) ls
+
+-- gen = general = supports up to base 36
+isGenDigit :: Int -> Char -> Bool
+isGenDigit radix ch
+    | radix <= 10 = '0' <= ch && ord ch - ord '0' < radix
+    | otherwise = ('0' <= ch && ch <= '9')
+                  || maybe False (< radix - 9) (alphaToInt ch)
+
+genDigitToInt :: Char -> Int
+genDigitToInt ch
+    | '0' <= ch && ch <= '9' = ord ch - ord '0'
+    | Just n <- alphaToInt ch = n + 9
+    | otherwise = error $ "genDigitToInt failed, unexpected char " ++ show ch
+
+intToGenDigit :: Int -> Char
+intToGenDigit n
+    | n <= 9 = chr (ord '0' + n)
+    | otherwise = chr (ord 'a' + n - 10)
+
+intToGenDigitString :: Int -> String
+intToGenDigitString = str1 . intToGenDigit
+
+splitInto :: Int -> [a] -> [[a]]
+splitInto n = takeWhile (not . null) . unfoldr (Just . splitAt n)
 -- }}}
 -- radix things {{{
 fromBaseDigits :: (Integral a) => a -> [a] -> a
@@ -156,60 +183,36 @@ asSingleBaseDigit base num
     | 0 <= num && num < base = Right num
     | otherwise = Left . CxBadInt $ num
 
-tokensOf :: (a -> Bool) -> [a] -> [Either [a] [a]]
-tokensOf p ls
-    = mapLeftRight (p . head) $ groupBy ((==) `on` p) ls
-
-isRadixDigit :: Int -> Char -> Bool
-isRadixDigit radix ch
-    | radix <= 10 = '0' <= ch && ord ch - ord '0' < radix
-    | otherwise = ('0' <= ch && ch <= '9')
-                  || maybe False (< radix - 9) (alphaToInt ch)
-
-radixDigitToInt :: Char -> Int
-radixDigitToInt ch
-    | '0' <= ch && ch <= '9' = ord ch - ord '0'
-    | Just n <- alphaToInt ch = n + 9
-    | otherwise = error $ "radixDigitToInt failed, unexpected char " ++ show ch
-
-intToRadixDigit :: Int -> Char
-intToRadixDigit n
-    | n <= 9 = chr (ord '0' + n)
-    | otherwise = chr (ord 'a' + n - 10)
-
-splitInto :: Int -> [a] -> [[a]]
-splitInto n = takeWhile (not . null) . unfoldr (Just . splitAt n)
-
 fromRadixToken :: Int -> Int -> String -> CxList Int
 fromRadixToken radix blockSize s
     = map (\block -> if length block == blockSize
-        then Right (fromBaseDigits radix $ map radixDigitToInt block)
+        then Right (fromBaseDigits radix $ map genDigitToInt block)
         else Left . CxBadString $ block
     ) $ splitInto blockSize s
 
 fromRadixStream :: Int -> Int -> String -> CxList Int
-fromRadixStream radix blockSize s
-    = concatMap (either (\x -> [Left (extraOrDelim x)]) (fromRadixToken radix blockSize)) $ tokensOf (isRadixDigit radix) s
+fromRadixStream radix blockSize
+    = concatMap (either ((:[]) . Left . extraOrDelim) (fromRadixToken radix blockSize)) . tokensOf (isGenDigit radix)
 
 toRadixStream :: Int -> CxList Int -> CxList String
 toRadixStream radix
-    = map (fmap intToRadixDigitString . (asSingleBaseDigit radix =<<)) . dropDelimiterLefts
+    = map (fmap intToGenDigitString . (asSingleBaseDigit radix =<<)) . crunchDelimiterLefts
 toUpperRadixStream :: Int -> CxList Int -> CxList String
 toUpperRadixStream radix = mapRights (map toUpper) . toRadixStream radix
 
 toRadixToken :: Int -> Int -> Int -> CxElem String
 toRadixToken radix blockSize =
-    fmap (map intToRadixDigit) . asBaseDigitsSized radix blockSize
+    fmap (map intToGenDigit) . asBaseDigitsSized radix blockSize
 
 toRadixTokens :: Int -> Int -> CxList Int -> CxList String
 toRadixTokens radix blockSize
-    = intersperseBetweenRights (Left (CxDelim " ")) . bindRights (toRadixToken radix blockSize)
+    = intersperseDelimSpaces . bindRights (toRadixToken radix blockSize)
 toUpperRadixTokens :: Int -> Int -> CxList Int -> CxList String
 toUpperRadixTokens radix blockSize = mapRights (map toUpper) . toRadixTokens radix blockSize
 
 fromRadixNumbers :: Int -> String -> CxList Int
 fromRadixNumbers radix
-    = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map radixDigitToInt)) . tokensOf (isRadixDigit radix)
+    = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map genDigitToInt)) . tokensOf (isGenDigit radix)
 
 fromRadixNumbersCodex :: Int -> CxList String -> CxList Int
 fromRadixNumbersCodex radix = concatMap ff
@@ -219,7 +222,7 @@ fromRadixNumbersCodex radix = concatMap ff
 
 toRadixNumbers :: Int -> CxList Int -> CxList String
 toRadixNumbers radix
-    = expandLeftSpaces . intersperseBetweenRights (Left (CxDelim " ")) . mapRights (map intToRadixDigit . asBaseDigits radix)
+    = expandLeftSpaces . intersperseDelimSpaces . mapRights (map intToGenDigit . asBaseDigits radix)
 -- }}}
 -- alpha {{{
 mod1 :: (Integral a) => a -> a -> a
@@ -263,10 +266,10 @@ fromAlphaStreamCodex = concatExtraStrings . concatMap ff . concatExtraStrings
           ff (Left x) = [Left x]
 
 toAlphaStream :: CxList Int -> CxList String
-toAlphaStream = bindRights intToAlphaString . dropDelimiterLefts
+toAlphaStream = bindRights intToAlphaString . crunchDelimiterLefts
 
 toUpperAlphaStream :: CxList Int -> CxList String
-toUpperAlphaStream = bindRights intToUpperAlphaString . dropDelimiterLefts
+toUpperAlphaStream = bindRights intToUpperAlphaString . crunchDelimiterLefts
 -- }}}
 -- base 64 {{{
 toBase64Char :: Int -> Char
@@ -343,7 +346,7 @@ toMorse c = case Map.lookup (toLower c) toMorseMap of
     Nothing -> Left $ CxExtra [c]
 
 toMorseCodex :: CxList String -> CxList String
-toMorseCodex = intersperseBetweenRights (Left (CxDelim " ")) . bindRights toMorse . ungroupRights
+toMorseCodex = intersperseDelimSpaces . bindRights toMorse . ungroupRights
 
 fromMorseMap :: Map.Map String Char
 fromMorseMap = Map.fromList $ map swap morseTable
@@ -496,7 +499,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "Nybble") : rs) -> Right (Right $ toUpperRadixStream 16, rs)
         ((unpl -> "byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toRadixTokens 16 2, rs)
         ((unpl -> "Byte"  ) : rs) -> Right (Right $ expandLeftSpaces . toUpperRadixTokens 16 2, rs)
-        ((unpl -> "char"  ) : rs) -> Right (Right $ shrinkLeftSpaces . mapRights chrString . dropDelimiterLefts, rs)
+        ((unpl -> "char"  ) : rs) -> Right (Right $ shrinkLeftSpaces . mapRights chrString . crunchDelimiterLefts, rs)
         ((unpl -> "alpha" ) : rs) -> Right (Right   toAlphaStream, rs)
         ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
         ((unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)
