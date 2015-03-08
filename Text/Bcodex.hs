@@ -501,7 +501,8 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     ("base64" : rs) -> Right (Left . concatMapRights $ fromBase64Codex, rs)
 
     ("alpha" : rs) -> Right (Left fromAlphaStreamCodex, rs)
-    ("rot13" : rs) -> Right (alphaStringCoder (+13), rs)
+    ("rot13" : rs)  -> Right (alphaStringCoder (+13), rs)
+    ("atbash" : rs) -> Right (alphaStringCoder (27-), rs)
     ("shift" : a : rs) -> do
         n <- expectNumberMeaningAfter "shift amount" "shift" a
         return (alphaStringCoder (+n), rs)

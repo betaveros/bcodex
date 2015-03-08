@@ -2,6 +2,7 @@
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
+import Test.QuickCheck.Property
 import Text.Bcodex
 import Data.Char
 
@@ -324,15 +325,18 @@ main = hspec $ do
                 forAll (listOf (choose (0 :: Int,255))) (\ns ->
                     let s = unwords (map show ns) in codexw "numbers to base64 base64 to numbers" s === s)
 
-        context "when performing Caesar shifts" $ do
+        context "when performing Caesar shifts and company" $ do
             it "works" $ do
                 codexw "shift 3" "primero" `shouldBe` "sulphur"
                 codexw "shift 23" "aBcdEf" `shouldBe` "xYzaBc"
             it "works with rot13 shortcut" $ codexw "rot13" "abjurer NoWhErE" `shouldBe` "nowhere AbJuReR"
+            it "supports atbash" $ codexw "atbash" "holy ark SLOB ZiP" `shouldBe` "slob zip HOLY ArK"
             it "shifting by 3 and 23 are inverses" $ forAll (listOf arbitrary) (\s -> codexw "shift 3" (codexw "shift 23" s) === s)
             it "shifting by 7 and 19 are inverses" $ forAll (listOf arbitrary) (\s -> codexw "shift 7" (codexw "shift 19" s) === s)
             it "rot13 is self-inverse" $
                 forAll (listOf arbitrary) (\s -> codexw "rot13" (codexw "rot13" s) === s)
+            it "atbash is self-inverse" $
+                forAll (listOf arbitrary) (\s -> codexw "atbash" (codexw "atbash" s) === s)
 
         context "when working with morse code" $ do
             it "can convert from morse code" $ do
