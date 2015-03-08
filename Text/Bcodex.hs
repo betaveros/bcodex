@@ -521,10 +521,18 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
 
 parseArithmeticOperation :: String -> Maybe (Int -> Int -> Int)
 parseArithmeticOperation s = case s of
-    "plus"  -> Just (+)
-    "minus" -> Just subtract
-    "times" -> Just (*)
-    "mod"   -> Just (flip mod)
+    "plus"     -> Just (+)
+    "add"      -> Just (+)
+    "+"        -> Just (+)
+    "minus"    -> Just subtract
+    "-"        -> Just subtract
+    "subtract" -> Just subtract
+    "times"    -> Just (*)
+    "multiply" -> Just (*)
+    "*"        -> Just (*)
+    "x"        -> Just (*)
+    "mod"      -> Just (flip mod)
+    "mod1"     -> Just (flip mod1)
     _ -> Nothing
 
 parseSingleIntCoder :: [String] -> Either String (CxCoder Int, [String])
@@ -555,6 +563,8 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
     (ostr@(parseArithmeticOperation -> Just o) : nstr : rs) -> do
         n <- expectNumberMeaningAfter "operand" ostr nstr
         Right (Left . fmap . fmap $ o n, rs)
+    ("negate"  : rs) -> Right (Left . fmap $ fmap negate, rs)
+    ("negated" : rs) -> Right (Left . fmap $ fmap negate, rs)
 
     (x : _) -> Left $ "Unexpected " ++ show x
     [] -> Left "Unexpected end"

@@ -202,14 +202,25 @@ main = hspec $ do
                 api "to 8 bits" [Right 1, Right 2] `shouldBe` Right [Right "00000001", Left (CxDelim " "), Right "00000010"]
 
         context "when working with arithmetic" $ do
-            it "can add (plus)" $
+            it "can add (plus, add, +)" $ do
                 api "plus 42" [Right 1, Right 2] `shouldBe` Left [Right 43, Right 44]
-            it "can subtract (minus)" $
+                api "+ 42" [Right 1, Right 2] `shouldBe` Left [Right 43, Right 44]
+            it "can subtract (minus, subtract, -)" $ do
                 api "minus 100" [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
-            it "can multiply (times)" $
+                api "subtract 100" [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
+                api "- 100" [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
+            it "can multiply (times, multiply, *, x)" $ do
                 api "times 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
+                api "multiply 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
+                api "* 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
+                api "x 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
             it "can mod" $
                 api "mod 9" [Right 207, Right 253, Right 492] `shouldBe` Left [Right 0, Right 1, Right 6]
+            it "can mod1" $
+                api "mod1 9" [Right 207, Right 253, Right 492] `shouldBe` Left [Right 9, Right 1, Right 6]
+            it "can negate" $ do
+                api "negate" [Right 207, Right 253, Right 492] `shouldBe` Left [Right (-207), Right (-253), Right (-492)]
+                api "negated" [Right 207, Right 253, Right 492] `shouldBe` Left [Right (-207), Right (-253), Right (-492)]
 
             it "preserves delim spaces" $
                 api "plus 1" [Right 3, Left (CxDelim " "), Right 5] `shouldBe` Left [Right 4, Left (CxDelim " "), Right 6]
