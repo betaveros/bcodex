@@ -15,6 +15,7 @@ import Text.Bcodex.Cx
 import Text.Bcodex.Alpha
 import Text.Bcodex.Radix
 import Text.Bcodex.Utils
+import Text.Bcodex.CxUtils
 -- }}}
 -- base 64 {{{
 toBase64Char :: Int -> Char

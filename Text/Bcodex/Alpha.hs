@@ -8,6 +8,7 @@ module Text.Bcodex.Alpha (
 import Data.Char (ord, chr, toUpper)
 import Text.Bcodex.Cx
 import Text.Bcodex.Utils
+import Text.Bcodex.CxUtils
 
 mod1 :: (Integral a) => a -> a -> a
 a `mod1` b = let x = a `mod` b in if x == 0 then b else x

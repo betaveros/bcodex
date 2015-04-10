@@ -11,6 +11,7 @@ import Data.Char (ord, chr, toUpper)
 import Text.Bcodex.Cx
 import Text.Bcodex.Alpha
 import Text.Bcodex.Utils
+import Text.Bcodex.CxUtils
 
 -- gen = general = supports up to base 36
 isGenDigit :: Int -> Char -> Bool
