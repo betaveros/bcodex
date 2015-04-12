@@ -176,6 +176,10 @@ parseCharClass s = case s of
     "alpha"      -> Just isAlpha
     "letter"     -> Just isLetter
     "letters"    -> Just isLetter
+    "vowel"      -> Just isVowel
+    "vowels"     -> Just isVowel
+    "consonant"  -> Just isConsonant
+    "consonants" -> Just isConsonant
     _ -> Nothing
 
 parseBaseSynonym :: String -> Maybe Int

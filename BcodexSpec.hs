@@ -370,6 +370,8 @@ main = hspec $ do
         context "when filtering" $ do
             it "can filter letters" $ do codexw "filter letters" "foo BAR baz QUUX / quick brown fox" `shouldBe` "fooBARbazQUUXquickbrownfox"
             it "can strip spaces" $ do codexw "strip spaces" "foo BAR baz QUUX / quick brown fox" `shouldBe` "fooBARbazQUUX/quickbrownfox"
+            it "can filter vowels" $ do codexw "filter vowels" "facetiously ;_; FACETIOUSLY" `shouldBe` "aeiouAEIOU"
+            it "can strip consonants" $ do codexw "strip consonants" "Functional programming in Haskell" `shouldBe` "uioa oai i ae"
             it "only has letters after filtering" $
                 forAll arbitrary (\s -> all isLetter $ codexw "filter letters" s)
             it "has no spaces after stripping" $
