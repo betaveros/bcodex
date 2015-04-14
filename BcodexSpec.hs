@@ -377,6 +377,10 @@ main = hspec $ do
             it "has no spaces after stripping" $
                 forAll arbitrary (\s -> not . any isSpace $ codexw "strip spaces" s)
 
+        context "when performing complex combinations" $ do
+            it "handles round trips to morse" $ do codexw "alpha to numbers to morse morse numbers to alpha" "complex" `shouldBe` "complex"
+            it "handles round trips to chars" $ do codexw "chars to bytes chars to bytes bytes to chars bytes to chars" "6*9=42" `shouldBe` "6*9=42"
+
     where aps = applyCxCoder . either error id . parseStringCoder . words
           api = applyCxCoder . either error id . parseIntCoder . words
           codexw = either error id . codex . words
