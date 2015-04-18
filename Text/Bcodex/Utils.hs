@@ -1,6 +1,7 @@
 module Text.Bcodex.Utils (
     mapRights, mapLefts,
-    bindRights, leftRight, mapLeftRight, groupRights, concatMapRights,
+    bindRights, leftRight, mapLeftRight, groupRights,
+    concatRights, concatMapRights,
     intersperseBetweenRights,
     ungroupRights, isDelimiter,
     str1, chrString, tokensOf, splitInto,
@@ -34,6 +35,9 @@ groupRights (Right r : xs) =
     case groupRights xs of
         (Right rs : gps) -> Right (r:rs) : gps
         gps -> Right [r] : gps
+
+concatRights :: [Either a [b]] -> [Either a [b]]
+concatRights = mapRights concat . groupRights
 
 concatMapRights :: (b -> [Either a c]) -> [Either a b] -> [Either a c]
 concatMapRights f = concatMap ff

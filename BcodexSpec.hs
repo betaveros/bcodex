@@ -377,9 +377,17 @@ main = hspec $ do
             it "has no spaces after stripping" $
                 forAll arbitrary (\s -> not . any isSpace $ codexw "strip spaces" s)
 
-        context "when performing complex combinations" $ do
-            it "handles round trips to morse" $ do codexw "alpha to numbers to morse morse numbers to alpha" "complex" `shouldBe` "complex"
-            it "handles round trips to chars" $ do codexw "chars to bytes chars to bytes bytes to chars bytes to chars" "6*9=42" `shouldBe` "6*9=42"
+        context "when round tripping to morse" $ do
+            it "handles stage 1" $ do codexw "alpha to numbers" "complex" `shouldBe` "3 15 13 16 12 5 24"
+            it "handles stage 2" $ do codexw "alpha to numbers to morse" "complex" `shouldBe` "...-- / .---- ..... / .---- ...-- / .---- -.... / .---- ..--- / ..... / ..--- ....-"
+            it "handles stage 3" $ do codexw "alpha to numbers to morse morse" "complex" `shouldBe` "3 15 13 16 12 5 24"
+            it "handles stage 4" $ do codexw "alpha to numbers to morse morse numbers to alpha" "complex" `shouldBe` "complex"
+
+        context "when round tripping to chars" $ do
+            it "handles stage 1" $ do codexw "chars to bytes" "6*9=42" `shouldBe` "36 2a 39 3d 34 32"
+            it "handles stage 2" $ do codexw "chars to bytes chars to bytes" "6*9=42" `shouldBe` "33 36 20 32 61 20 33 39 20 33 64 20 33 34 20 33 32"
+            it "handles stage 3" $ do codexw "chars to bytes chars to bytes bytes to chars" "6*9=42" `shouldBe` "36 2a 39 3d 34 32"
+            it "handles stage 4" $ do codexw "chars to bytes chars to bytes bytes to chars bytes to chars" "6*9=42" `shouldBe` "6*9=42"
 
     where aps = applyCxCoder . either error id . parseStringCoder . words
           api = applyCxCoder . either error id . parseIntCoder . words

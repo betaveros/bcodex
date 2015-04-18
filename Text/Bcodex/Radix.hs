@@ -90,7 +90,7 @@ fromRadixNumbers radix
     = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map genDigitToInt)) . tokensOf (isGenDigit radix)
 
 fromRadixNumbersCodex :: Int -> CxList String -> CxList Int
-fromRadixNumbersCodex radix = concatMapRights (fromRadixNumbers radix) . shrinkExtraSpaces
+fromRadixNumbersCodex radix = concatMapRights (fromRadixNumbers radix) . concatRights . shrinkExtraSpaces
 
 intToGenDigitString :: Int -> String
 intToGenDigitString = str1 . intToGenDigit

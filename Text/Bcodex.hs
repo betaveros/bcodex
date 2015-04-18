@@ -121,7 +121,7 @@ fromMorse s = case Map.lookup s fromMorseMap of
     Nothing -> Left $ CxBadString s
 
 fromMorseCodex :: CxList String -> CxList String
-fromMorseCodex = mapRights (:[]) . bindRights fromMorse . crunchMorseDelimiterLefts . concatMapRights (mapLefts CxExtra . tokensOf (`elem` ".-"))
+fromMorseCodex = mapRights (:[]) . bindRights fromMorse . crunchMorseDelimiterLefts . concatMapRights (mapLefts CxExtra . tokensOf (`elem` ".-")) . concatRights
 -- }}}
 -- translate {{{
 translate :: String -> String -> Char -> Char
