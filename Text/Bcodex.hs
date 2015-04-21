@@ -248,6 +248,10 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of
         "to" -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
         _ -> Left $ "Translate syntax should be 'translate _ to _', got " ++ show toKeyword
+    ("split-lines" : rs) ->
+        Right (Right . mapAllStrings $ map (\x -> case x of
+            ' ' -> '\n'
+            _   -> x), rs)
     ((parseCaseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
 
     (x : _) -> Left $ "Unexpected " ++ show x
