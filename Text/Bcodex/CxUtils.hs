@@ -58,7 +58,7 @@ crunchMorseDelimiterLefts = mapMaybe f
     where f (Left (CxExtra ""   )) = Nothing
           f (Left (CxDelim _    )) = Nothing
           f (Left (CxExtra " "  )) = Nothing
-          f (Left (CxExtra " / ")) = Just (Left (CxExtra " "))
+          f (Left (CxExtra " / ")) = Just (Left (CxDelim " "))
           f x = Just x
 
 mapAllStrings :: (String -> String) -> CxList String -> CxList String
