@@ -254,6 +254,8 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
             _   -> x), rs)
     ((parseCaseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
 
+    ("raw" : rs) -> Right (Right ((:[]) . Right . show), rs)
+
     (x : _) -> Left $ "Unexpected " ++ show x
     [] -> Left "Unexpected end"
 
@@ -303,6 +305,8 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         Right (Left . fmap . fmap $ o n, rs)
     ("negate"  : rs) -> Right (Left . fmap $ fmap negate, rs)
     ("negated" : rs) -> Right (Left . fmap $ fmap negate, rs)
+
+    ("raw" : rs) -> Right (Right ((:[]) . Right . show), rs)
 
     (x : _) -> Left $ "Unexpected " ++ show x
     [] -> Left "Unexpected end"
