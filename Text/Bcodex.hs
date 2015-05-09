@@ -221,7 +221,7 @@ expectNumberMeaningAfter m s t = case readInt t of
 
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s of
-    ((parseRadixTokenSynonym -> Right (r, a)) : rs) -> Right (Left . concatMapRights $ fromRadixStream r a, rs)
+    ((parseRadixTokenSynonym -> Right (r, a)) : rs) -> Right (Left $ concatMapRights (fromRadixStream r a) . concatRights, rs)
     ((readInt -> Just n) : tokenstr : rs) -> case parseRadixTokenSynonym tokenstr of
         Right (r, a) -> Right (Left . concatMapRights $ fromRadixStream r (a*n), rs)
         Left e -> Left $ e ++ " after number " ++ show n ++ ", got " ++ show tokenstr

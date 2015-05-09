@@ -385,8 +385,8 @@ main = hspec $ do
 
         context "when round tripping to chars" $ do
             it "handles stage 1" $ do codexw "chars to bytes" "6*9=42" `shouldBe` "36 2a 39 3d 34 32"
-            it "handles stage 2" $ do codexw "chars to bytes chars to bytes" "6*9=42" `shouldBe` "33 36 20 32 61 20 33 39 20 33 64 20 33 34 20 33 32"
-            it "handles stage 3" $ do codexw "chars to bytes chars to bytes bytes to chars" "6*9=42" `shouldBe` "36 2a 39 3d 34 32"
+            it "handles stage 2" $ do codexw "chars to bytes chars to bytes" "6*9=42" `shouldBe` "33 36 32 61 33 39 33 64 33 34 33 32"
+            it "handles stage 3" $ do codexw "chars to bytes chars to bytes bytes to chars" "6*9=42" `shouldBe` "362a393d3432"
             it "handles stage 4" $ do codexw "chars to bytes chars to bytes bytes to chars bytes to chars" "6*9=42" `shouldBe` "6*9=42"
 
     where aps = applyCxCoder . either error id . parseStringCoder . words
