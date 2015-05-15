@@ -34,7 +34,7 @@ $ bcodex numbers to alpha # inverse: alpha to numbers
 we adhere to the values of the lambda knight. strength, purity, and laziness.
 ```
 
-(Quote sources: [xkcd 1270](https://xkcd.com/1270/), ["Trolling #haskell"](https://gist.github.com/quchen/5280339), ["Write Haskell as fast as C"](https://github.com/bitemyapp/learnhaskell/blob/master/write_haskell_as_fast_as_c.md), unknown, [<hae> on #haskell](http://ircbrowse.net/day/haskell/2015/02/15?id=20090966&timestamp=1423967586#t1423967586). Okay I'm just really bored.)
+(Quote sources: [xkcd 1270](https://xkcd.com/1270/), ["Trolling #haskell"](https://gist.github.com/quchen/5280339), ["Write Haskell as fast as C"](https://github.com/bitemyapp/learnhaskell/blob/master/write_haskell_as_fast_as_c.md), unknown, [\<hae\> on #haskell](http://ircbrowse.net/day/haskell/2015/02/15?id=20090966&timestamp=1423967586#t1423967586). Okay I'm just really bored.)
 
 Other usages:
 
