@@ -4,7 +4,7 @@ module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, parseStri
 -- imports {{{
 import Control.Arrow (left)
 import Control.Applicative ((<$>))
-import Data.Char (isAlpha, isLetter, isSpace, ord, toUpper, toLower)
+import Data.Char (ord)
 import Data.Maybe (fromMaybe)
 import qualified Data.Map as Map
 import Text.Read (readMaybe)
@@ -16,6 +16,7 @@ import Text.Bcodex.Morse
 import Text.Bcodex.Utils
 import Text.Bcodex.CxUtils
 import Text.Bcodex.Base64
+import qualified Text.Bcodex.Parse as Parse
 -- }}}
 -- translate {{{
 translate :: String -> String -> Char -> Char
@@ -29,15 +30,10 @@ readInt :: String -> Maybe Int
 readInt = readMaybe
 
 unpl :: String -> String
-unpl s = fromMaybe s $ unpluralize s
+unpl = Parse.maybeUnpluralize
 -- }}}
 -- CxCoders {{{
 type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList String)
-
-unpluralize :: String -> Maybe String
-unpluralize s = case last s of
-    's' -> Just $ init s
-    _   -> Nothing
 
 alphaStringCoder :: (Int -> Int) -> CxCoder String
 alphaStringCoder = Right . fmap . fmap . fmap . mapUnderAlpha
@@ -55,59 +51,6 @@ applyCxCoderToString c = case c of
     Right f -> concatMap (either showCxLeft id)  . f . (:[]) . Right
 -- }}}
 -- parsing command line args (synonyms etc.) {{{
-parseRadixTokenSynonym :: String -> Either String (Int, Int)
-parseRadixTokenSynonym s = case unpl s of
-    "bit"    -> Right (2, 1)
-    "nybble" -> Right (16, 1)
-    "byte"   -> Right (16, 2)
-    _        -> Left "Expecting 'bit[s]', 'byte[s]', or 'nybble[s]'"
-
-parseCharClass :: String -> Maybe (Char -> Bool)
-parseCharClass s = case s of
-    "space"      -> Just isSpace
-    "spaces"     -> Just isSpace
-    "whitespace" -> Just isSpace
-    "alpha"      -> Just isAlpha
-    "letter"     -> Just isLetter
-    "letters"    -> Just isLetter
-    "vowel"      -> Just isVowel
-    "vowels"     -> Just isVowel
-    "consonant"  -> Just isConsonant
-    "consonants" -> Just isConsonant
-    _ -> Nothing
-
-parseBaseSynonym :: String -> Maybe Int
-parseBaseSynonym s = case s of
-    "number"  -> Just 10
-    "numbers" -> Just 10
-    "decimal" -> Just 10
-    "bin"     -> Just 2
-    "binary"  -> Just 2
-    "oct"     -> Just 8
-    "octal"   -> Just 8
-    "hex"         -> Just 16
-    "hexadecimal" -> Just 16
-    _ -> Nothing
-
-parseCaseSynonym :: String -> Maybe (Char -> Char)
-parseCaseSynonym s = case s of
-    "upper"      -> Just toUpper
-    "uppercase"  -> Just toUpper
-    "uppercased" -> Just toUpper
-    "lower"      -> Just toLower
-    "lowercase"  -> Just toLower
-    "lowercased" -> Just toLower
-    _ -> Nothing
-
-parseFilterSynonym :: String -> Maybe ((a -> Bool) -> a -> Bool)
-parseFilterSynonym s = case s of
-    "filter" -> Just id
-    "only"   -> Just id
-    "strip"  -> Just (not .)
-    "drop"   -> Just (not .)
-    _        -> Nothing
-
-
 expectNumberMeaningAfter :: String -> String -> String -> Either String Int
 expectNumberMeaningAfter m s t = case readInt t of
     Just n -> Right n
@@ -115,12 +58,12 @@ expectNumberMeaningAfter m s t = case readInt t of
 
 parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
 parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s of
-    ((parseRadixTokenSynonym -> Right (r, a)) : rs) -> Right (Left $ concatMapRights (fromRadixStream r a) . concatRights, rs)
-    ((readInt -> Just n) : tokenstr : rs) -> case parseRadixTokenSynonym tokenstr of
+    ((Parse.radixTokenSynonym -> Right (r, a)) : rs) -> Right (Left $ concatMapRights (fromRadixStream r a) . concatRights, rs)
+    ((readInt -> Just n) : tokenstr : rs) -> case Parse.radixTokenSynonym tokenstr of
         Right (r, a) -> Right (Left . concatMapRights $ fromRadixStream r (a*n), rs)
         Left e -> Left $ e ++ " after number " ++ show n ++ ", got " ++ show tokenstr
 
-    ((parseBaseSynonym -> Just b) : rs) -> Right (Left $ fromRadixNumbersCodex b, rs)
+    ((Parse.baseSynonym -> Just b) : rs) -> Right (Left $ fromRadixNumbersCodex b, rs)
     ("base" : bstr : rs) -> do
         b <- expectNumberMeaningAfter "radix" "base" bstr
         Right (Left $ fromRadixNumbersCodex b, rs)
@@ -138,7 +81,7 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
 
-    ((parseFilterSynonym -> Just f) : (parseCharClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (f p), rs)
+    ((Parse.filterSynonym -> Just f) : (Parse.charClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (f p), rs)
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of
         "to" -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
         _ -> Left $ "Translate syntax should be 'translate _ to _', got " ++ show toKeyword
@@ -146,7 +89,7 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
         Right (Right . mapAllStrings $ map (\x -> case x of
             ' ' -> '\n'
             _   -> x), rs)
-    ((parseCaseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
+    ((Parse.caseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
 
     ("raw" : rs) -> Right (Right ((:[]) . Right . show), rs)
 
@@ -179,7 +122,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "Byte"  ) : rs) -> Right (Right $ expandExtraSpaces . toUpperRadixTokens 16 2, rs)
 
         ((unpl -> "number") : rs) -> Right (Right $ toRadixNumbers 10, rs)
-        ((parseBaseSynonym -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
+        ((Parse.baseSynonym -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
         ("base" : (readInt -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
 
         ((unpl -> "char"  ) : rs) -> Right (Right $ mapRights chrString . crunchDelimiterLefts, rs)
@@ -188,7 +131,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
 
         ((unpl -> "base64") : rs) -> Right (Right   toBase64Codex, rs)
-        ((readInt -> Just n) : tokenstr : rs) -> case parseRadixTokenSynonym tokenstr of
+        ((readInt -> Just n) : tokenstr : rs) -> case Parse.radixTokenSynonym tokenstr of
             Right (r, a) -> Right (Right $ toRadixTokens r (a*n), rs)
             Left e -> Left $ e ++ " after 'to' number " ++ show n ++ ", got " ++ show tokenstr
         (x : _) -> Left $ "Unexpected " ++ x ++ " after 'to'"
