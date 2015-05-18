@@ -1,7 +1,7 @@
 module Text.Bcodex.Parse (
     unpluralize, maybeUnpluralize,
     radixTokenSynonym, charClass, baseSynonym, caseSynonym,
-    filterSynonym) where
+    filterSynonym, arithmeticOperation) where
 
 import Data.Char (isAlpha, isLetter, isSpace, toUpper, toLower)
 import Text.Bcodex.Alpha
@@ -66,3 +66,19 @@ filterSynonym s = case s of
     "strip"  -> Just (not .)
     "drop"   -> Just (not .)
     _        -> Nothing
+
+arithmeticOperation :: String -> Maybe (Int -> Int -> Int)
+arithmeticOperation s = case s of
+    "plus"     -> Just (+)
+    "add"      -> Just (+)
+    "+"        -> Just (+)
+    "minus"    -> Just subtract
+    "-"        -> Just subtract
+    "subtract" -> Just subtract
+    "times"    -> Just (*)
+    "multiply" -> Just (*)
+    "*"        -> Just (*)
+    "x"        -> Just (*)
+    "mod"      -> Just (flip mod)
+    "mod1"     -> Just (flip mod1)
+    _ -> Nothing
