@@ -34,13 +34,13 @@ main = hspec $ do
                 aps "decimal" [Right "42 13 37"] `shouldBe` Left [Right 42, Left (CxDelim " "), Right 13, Left (CxDelim " "), Right 37]
 
             it "works with hexadecimal" $ do
-                aps "hex" [Right "10 20 30"] `shouldBe` Left [Right 16, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 48]
+                aps "hex"         [Right "10 20 30"] `shouldBe` Left [Right 16, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 48]
                 aps "hexadecimal" [Right "10 20 30"] `shouldBe` Left [Right 16, Left (CxDelim " "), Right 32, Left (CxDelim " "), Right 48]
             it "works with octal" $ do
-                aps "oct" [Right "10 20 30"] `shouldBe` Left [Right 8, Left (CxDelim " "), Right 16, Left (CxDelim " "), Right 24]
+                aps "oct"   [Right "10 20 30"] `shouldBe` Left [Right 8, Left (CxDelim " "), Right 16, Left (CxDelim " "), Right 24]
                 aps "octal" [Right "10 20 30"] `shouldBe` Left [Right 8, Left (CxDelim " "), Right 16, Left (CxDelim " "), Right 24]
             it "works with binary" $ do
-                aps "bin" [Right "10 100 1000"] `shouldBe` Left [Right 2, Left (CxDelim " "), Right 4, Left (CxDelim " "), Right 8]
+                aps "bin"    [Right "10 100 1000"] `shouldBe` Left [Right 2, Left (CxDelim " "), Right 4, Left (CxDelim " "), Right 8]
                 aps "binary" [Right "10 100 1000"] `shouldBe` Left [Right 2, Left (CxDelim " "), Right 4, Left (CxDelim " "), Right 8]
             it "works with specified bases" $ do
                 aps "base 11" [Right "a1"] `shouldBe` Left [Right 111]
@@ -59,8 +59,8 @@ main = hspec $ do
                 aps "numbers" [Right "  "] `shouldBe` Left [Left (CxExtra " ")]
 
             it "preserves delimiters" $ do
-                aps "numbers" [Left (CxDelim " ")] `shouldBe` Left [Left (CxDelim " ")]
-                aps "numbers" [Left (CxDelim ",")] `shouldBe` Left [Left (CxDelim ",")]
+                aps "numbers" [Left (CxDelim " " )] `shouldBe` Left [Left (CxDelim " " )]
+                aps "numbers" [Left (CxDelim "," )] `shouldBe` Left [Left (CxDelim "," )]
                 aps "numbers" [Left (CxDelim "  ")] `shouldBe` Left [Left (CxDelim "  ")]
             it "shrinks extras" $ do
                 aps "numbers" [Left (CxExtra "  ")] `shouldBe` Left [Left (CxExtra " ")]
@@ -93,7 +93,7 @@ main = hspec $ do
             it "handles two equals" $
                 aps "base64" [Right "Lg=="] `shouldBe` Left [Right 46]
             it "considers spaces bad strings" $ do
-                aps "base64" [Right "QQ== QQ=="] `shouldBe` Left [Right 65, Left (CxBadString " "), Right 65]
+                aps "base64" [Right "QQ== QQ==" ] `shouldBe` Left [Right 65, Left (CxBadString " " ), Right 65]
                 aps "base64" [Right "QQ==  QQ=="] `shouldBe` Left [Right 65, Left (CxBadString "  "), Right 65]
             it "considers garbage bad strings" $ do
                 aps "base64" [Right "QQ==@**@QQ=="] `shouldBe` Left [Right 65, Left (CxBadString "@**@"), Right 65]
@@ -203,22 +203,22 @@ main = hspec $ do
         context "when working with arithmetic" $ do
             it "can add (plus, add, +)" $ do
                 api "plus 42" [Right 1, Right 2] `shouldBe` Left [Right 43, Right 44]
-                api "+ 42" [Right 1, Right 2] `shouldBe` Left [Right 43, Right 44]
+                api "+ 42"    [Right 1, Right 2] `shouldBe` Left [Right 43, Right 44]
             it "can subtract (minus, subtract, -)" $ do
-                api "minus 100" [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
+                api "minus 100"    [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
                 api "subtract 100" [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
-                api "- 100" [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
+                api "- 100"        [Right 101, Right 102] `shouldBe` Left [Right 1, Right 2]
             it "can multiply (times, multiply, *, x)" $ do
-                api "times 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
+                api "times 37"    [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
                 api "multiply 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
-                api "* 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
-                api "x 37" [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
+                api "* 37"        [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
+                api "x 37"        [Right 17, Right 18] `shouldBe` Left [Right 629, Right 666]
             it "can mod" $
                 api "mod 9" [Right 207, Right 253, Right 492] `shouldBe` Left [Right 0, Right 1, Right 6]
             it "can mod1" $
                 api "mod1 9" [Right 207, Right 253, Right 492] `shouldBe` Left [Right 9, Right 1, Right 6]
             it "can negate" $ do
-                api "negate" [Right 207, Right 253, Right 492] `shouldBe` Left [Right (-207), Right (-253), Right (-492)]
+                api "negate"  [Right 207, Right 253, Right 492] `shouldBe` Left [Right (-207), Right (-253), Right (-492)]
                 api "negated" [Right 207, Right 253, Right 492] `shouldBe` Left [Right (-207), Right (-253), Right (-492)]
 
             it "preserves delim spaces" $
@@ -259,7 +259,7 @@ main = hspec $ do
 
             context "when converting from numbers" $ do
 
-                it "can convert numbers to letters" $ codexw "numbers to alpha" "1 2 3 4 5 6 7 8 9 10" `shouldBe` "abcdefghij"
+                it "can convert numbers to letters"   $ codexw "numbers to alpha" "1 2 3 4 5 6 7 8 9 10" `shouldBe` "abcdefghij"
                 it "can convert numbers to UPPERCASE" $ codexw "numbers to Alpha" "1 2 3 4 5 6 7 8 9 10" `shouldBe` "ABCDEFGHIJ"
 
                 it "works with hexadecimal" $ codexw "hex to number" "ff" `shouldBe` "255"
