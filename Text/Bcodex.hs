@@ -16,6 +16,7 @@ import Text.Bcodex.Morse
 import Text.Bcodex.Utils
 import Text.Bcodex.CxUtils
 import Text.Bcodex.Base64
+import Text.Bcodex.Ascii
 import qualified Text.Bcodex.Parse as Parse
 -- }}}
 -- translate {{{
@@ -37,6 +38,9 @@ type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList String)
 
 alphaStringCoder :: (Int -> Int) -> CxCoder String
 alphaStringCoder = Right . fmap . fmap . fmap . mapUnderAlpha
+
+asciiStringCoder :: (Int -> Int) -> CxCoder String
+asciiStringCoder = Right . fmap . fmap . fmap . mapUnderAscii
 
 rcompose :: (CxList a -> CxList b) -> CxCoder b -> CxCoder a
 rcompose f (Left f') = Left (f' . f)
@@ -74,6 +78,7 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     ("alpha" : rs) -> Right (Left fromAlphaStreamCodex, rs)
     ("rot13" : rs)  -> Right (alphaStringCoder (+13), rs)
     ("atbash" : rs) -> Right (alphaStringCoder (27-), rs)
+    ("rot47" : rs)  -> Right (asciiStringCoder (+47), rs)
     ("shift" : a : rs) -> do
         n <- expectNumberMeaningAfter "shift amount" "shift" a
         return (alphaStringCoder (+n), rs)
