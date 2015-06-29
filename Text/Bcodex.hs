@@ -86,7 +86,9 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
 
-    ((Parse.filterSynonym -> Just f) : (Parse.charClass -> Just p) : rs) -> Right (Right . mapAllStrings $ filter (f p), rs)
+    (f0@(Parse.filterSynonym -> Just f) : p0 : rs) -> case Parse.charClass p0 of
+        Just p -> Right (Right . mapAllStrings $ filter (f p), rs)
+        Nothing -> Left $ "Expecting character class after '" ++ f0 ++ "', got " ++ p0
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of
         "to" -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
         _ -> Left $ "Translate syntax should be 'translate _ to _', got " ++ show toKeyword

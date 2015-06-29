@@ -18,9 +18,10 @@ maybeUnpluralize s = fromMaybe s $ unpluralize s
 radixTokenSynonym :: String -> Either String (Int, Int)
 radixTokenSynonym s = case maybeUnpluralize s of
     "bit"    -> Right (2, 1)
+    "digit"  -> Right (10, 1)
     "nybble" -> Right (16, 1)
     "byte"   -> Right (16, 2)
-    _        -> Left "Expecting 'bit[s]', 'byte[s]', or 'nybble[s]'"
+    _        -> Left "Expecting 'bit[s]', 'byte[s]', 'digit[s]', or 'nybble[s]'"
 
 charClass :: String -> Maybe (Char -> Bool)
 charClass s = case s of

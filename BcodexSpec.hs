@@ -69,6 +69,9 @@ main = hspec $ do
             it "works with bits" $ do
                 aps "8 bits" [Right "001110100010110100101001"] `shouldBe` Left [Right 58, Right 45, Right 41]
                 aps "7 bits" [Right "011101001011010101001"] `shouldBe` Left [Right 58, Right 45, Right 41]
+            it "works with digits" $ do
+                aps "2 digits" [Right "140927"   ] `shouldBe` Left [Right 14, Right 9, Right 27]
+                aps "3 digits" [Right "014009027"] `shouldBe` Left [Right 14, Right 9, Right 27]
             it "works with nybbles" $ do
                 aps "2 nybbles" [Right "3a2D29"] `shouldBe` Left [Right 58, Right 45, Right 41]
                 aps "3 nybbles" [Right "03a02D029"] `shouldBe` Left [Right 58, Right 45, Right 41]
