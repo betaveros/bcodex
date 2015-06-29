@@ -125,6 +125,8 @@ main = hspec $ do
                 aps "drop spaces" [Right " a: b ", Left (CxBadString " c: d "), Left (CxExtra " e: f "), Left (CxDelim " g: h ")] `shouldBe` Right [Right "a:b", Left (CxBadString "c:d"), Left (CxExtra "e:f"), Left (CxDelim "g:h")]
             it "can filter letters" $
                 aps "filter letters" [Right " a: b ", Left (CxBadString " c: d "), Left (CxExtra " e: f "), Left (CxDelim " g: h ")] `shouldBe` Right [Right "ab", Left (CxBadString "cd"), Left (CxExtra "ef"), Left (CxDelim "gh")]
+            it "can filter digits" $
+                aps "filter digits" [Right " 1/2b ", Left (CxBadString " 3^^7 "), Left (CxExtra " 0=0x "), Left (CxDelim " 4x6! ")] `shouldBe` Right [Right "12", Left (CxBadString "37"), Left (CxExtra "00"), Left (CxDelim "46")]
 
         context "when transforming text" $ do
             it "can translate" $
