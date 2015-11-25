@@ -335,6 +335,7 @@ main = hspec $ do
                 it "handles weird characters" $ codexw "chars to base64" "?>?>?>" `shouldBe` "Pz4/Pj8+"
             context "when converting from base64" $ do
                 it "works" $ codexw "base64 to chars" "YW55IGNhcm5hbCBwbGVhc3VyZQ==" `shouldBe` "any carnal pleasure"
+                it "iterates" $ codexw "base64 to chars base64 to chars base64 to chars" "VUVRNEwxQm5QVDA9" `shouldBe` "<??>"
                 it "handles weird characters" $ codexw "base64 to chars" "Pz4/Pj8+" `shouldBe` "?>?>?>"
             it "is invertible" $
                 forAll (listOf (choose (0 :: Int,255))) (\ns ->

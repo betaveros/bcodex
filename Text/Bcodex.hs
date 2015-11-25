@@ -73,7 +73,7 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
         Right (Left $ fromRadixNumbersCodex b, rs)
 
     ((unpl -> "char") : rs) -> Right (Left . concatMapRights $ map (Right . ord), rs)
-    ("base64" : rs) -> Right (Left . concatMapRights $ fromBase64Codex, rs)
+    ("base64" : rs) -> Right (Left (concatMapRights fromBase64Codex . concatRights), rs)
 
     ("alpha" : rs) -> Right (Left fromAlphaStreamCodex, rs)
     ("rot13" : rs)  -> Right (alphaStringCoder (+13), rs)
