@@ -117,6 +117,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ("base" : (readInt -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
 
         ((unpl -> "char"  ) : rs) -> Right (Right $ mapRights chrString . crunchDelimiterLefts, rs)
+        ((unpl -> "printable"  ) : rs) -> Right (Right $ bindRights visiblePrintableChrString . crunchDelimiterLefts, rs)
 
         ((unpl -> "alpha" ) : rs) -> Right (Right   toAlphaStream, rs)
         ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
