@@ -39,6 +39,7 @@ charClass s = case s of
     "vowels"     -> Just isVowel
     "consonant"  -> Just isConsonant
     "consonants" -> Just isConsonant
+    '[':cs | last cs == ']' -> Just (`elem` init cs)
     _ -> Nothing
 
 baseSynonym :: String -> Maybe Int
@@ -67,7 +68,9 @@ caseSynonym s = case s of
 filterSynonym :: String -> Maybe ((a -> Bool) -> a -> Bool)
 filterSynonym s = case s of
     "filter" -> Just id
+    "keep"   -> Just id
     "only"   -> Just id
+    "take"   -> Just id
     "strip"  -> Just (not .)
     "drop"   -> Just (not .)
     _        -> Nothing
