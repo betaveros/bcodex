@@ -1,0 +1,83 @@
+<html>
+	<head>
+		<style>
+			body { font-family: sans-serif; padding: 16px; }
+			.bee { color: #cfc; text-shadow: 0 0 2px black, 0 0 8px black;  }
+			.err .bee { color: red; text-shadow: 0 0 8px red;  }
+			h1 { border-bottom: 1px solid green; }
+			#prompt, #args { font-weight: bold; }
+			#args { font-family: monospace; font-size: 100%; min-width: 60%; }
+			#input, #areaoutput { font-family: monospace; width: 100%; margin-bottom: 16px; }
+			#output { font-family: monospace; margin-bottom: 16px; white-space: pre-wrap; }
+			#areaoutput { display: none; }
+			.err #output, .err #areaoutput { color: red; font-weight: bold; }
+			.areachecked #output { display: none; }
+			.areachecked #areaoutput { display: inline; }
+			#go {
+				min-width: 2em;
+				background-color: #010;
+				background-image: linear-gradient(to bottom, #666, #222);
+				background-repeat: repeat-x;
+				box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.05);
+				color: #cfc;
+				font-size: 200%;
+				text-shadow: 0 2px 2px rgba(0, 0, 0, 0.75);
+				border: 2px solid #666;
+				border-radius: 16px;
+				margin-right: 0.8em;
+			}
+			#go:hover {
+				background-image: linear-gradient(to bottom, #898, #232);
+				box-shadow: 0 0 3px 3px #cfc, inset 0 1px 2px rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.5);
+				background-position: 0 -0.5em;
+			}
+			#go:active {
+				background-color: #222;
+				background: linear-gradient(to bottom, #222, #444);
+				background-position: 0 0;
+				box-shadow: inset 0 2px 3px #000, inset 0 4px 6px #000;
+			}
+			.bs { color: #f00; }
+			.bi { color: #90c; }
+			.ex { color: #00f; }
+			.de { color: #090; }
+			.ri { color: #609; font-weight: bold; }
+			.rs { font-weight: bold; }
+		</style>
+	</head>
+	<body>
+		<h1><span class="bee">b</span>codex</h1>
+		<p>Compiled from Haskell to JS with <a href="http://haste-lang.org/">Haste</a>. Things to try:
+		<select id="try">
+			<option value="rot13">rot13</option>
+			<option value="rot47">rot47</option>
+			<option value="atbash">atbash</option>
+			<option value="to morse" selected="selected">to morse</option>
+			<option value="morse">morse</option>
+			<option value="chars to bytes">chars to bytes</option>
+			<option value="bytes to chars">bytes to chars</option>
+			<option value="chars to base64">chars to base64</option>
+			<option value="base64 to chars">base64 to chars</option>
+			<option value="alpha to numbers">alpha to numbers</option>
+			<option value="numbers to alpha">numbers to alpha</option>
+			<option value="alpha to 5 bits">alpha to 5 bits</option>
+			<option value="5 bits to alpha">5 bits to alpha</option>
+			<option value="alpha + 253 to numbers">alpha + 253 to numbers</option>
+			<option value="numbers - 253 to alpha">numbers - 253 to alpha</option>
+			<option value="rot47 chars to bytes to morse">rot47 chars to bytes to morse</option>
+			<option value="morse bytes to chars rot47">morse bytes to chars rot47</option>
+			<option value="chars to base64 chars to base64 chars to base64 chars to base64">chars to base64 chars to base64 chars to base64 chars to base64</option>
+			<option value="base64 to chars base64 to chars base64 to chars base64 to chars">base64 to chars base64 to chars base64 to chars base64 to chars</option>
+		</select>
+		</p>
+		<p id="prompt"><code>$ bcodex <input type="text" id="args" value="to morse"/></code></p>
+		<textarea id="input">hello world</textarea>
+		<div id="output">(output goes here)</div>
+		<textarea id="areaoutput">(output goes here)</textarea>
+		<button id="go">go</button>
+		<label for="auto">auto?</label> <input type="checkbox" id="auto" value="auto" checked="checked" />
+		<label for="areacheck">textarea output?</label> <input type="checkbox" id="areacheck" value="areacheck" />
+		<script type="text/javascript" src="BcodexWeb.min.js"></script>
+		<a href="https://github.com/betaveros/bcodex"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/e7bbb0521b397edbd5fe43e7f760759336b5e05f/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f677265656e5f3030373230302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png"></a>
+	</body>
+</html>
