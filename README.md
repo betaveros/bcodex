@@ -5,6 +5,8 @@ A command-line utility in Haskell for converting between "encodings". Not charac
 
 It now also supports various text transformations, which can be chained in weird ways.
 
+I compiled it for the internet with [Haste](http://haste-lang.org/). [**Try it online!**](http://betaveros.github.io/bcodex/)
+
 Naming
 ======
 
