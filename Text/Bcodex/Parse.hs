@@ -3,7 +3,8 @@ module Text.Bcodex.Parse (
     radixTokenSynonym, charClass, baseSynonym, caseSynonym,
     filterSynonym, arithmeticOperation) where
 
-import Data.Char (isAlpha, isDigit, isLetter, isSpace, toUpper, toLower)
+import Data.Char (isAlpha, isDigit, isLetter, isSpace, isPunctuation, 
+    isSymbol, toUpper, toLower)
 import Text.Bcodex.Alpha
 import Data.Maybe (fromMaybe)
 
@@ -39,6 +40,9 @@ charClass s = case s of
     "vowels"     -> Just isVowel
     "consonant"  -> Just isConsonant
     "consonants" -> Just isConsonant
+    "punctuation"-> Just isPunctuation
+    "symbol"     -> Just isSymbol
+    "symbols"    -> Just isSymbol
     '[':cs | last cs == ']' -> Just (`elem` init cs)
     _ -> Nothing
 
