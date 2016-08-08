@@ -18,16 +18,16 @@ toBase64Char x
     | x == 63 = '/'
     | otherwise = error ("Out of range for base 64: " ++ show x)
 
-fromBase64Char :: Char -> Int
+fromBase64Char :: Char -> Either String Int
 fromBase64Char c
-    | 'A' <= c && c <= 'Z' = ord c - ord 'A'
-    | 'a' <= c && c <= 'z' = ord c - ord 'a' + 26
-    | '0' <= c && c <= '9' = ord c - ord '0' + 52
-    | c == '+' = 62
-    | c == '/' = 63
-    | c == '-' = 62
-    | c == '_' = 63
-    | otherwise = error ("Invalid base64 char: " ++ show c)
+    | 'A' <= c && c <= 'Z' = Right $ ord c - ord 'A'
+    | 'a' <= c && c <= 'z' = Right $ ord c - ord 'a' + 26
+    | '0' <= c && c <= '9' = Right $ ord c - ord '0' + 52
+    | c == '+' = Right 62
+    | c == '/' = Right 63
+    | c == '-' = Right 62
+    | c == '_' = Right 63
+    | otherwise = Left ("Invalid base64 char: " ++ show c)
 
 isBase64Char :: Char -> Bool
 isBase64Char c = or [
@@ -52,15 +52,20 @@ toBase64 [x1]          = to64Fragments 2 (flip shiftL 4 $ packChunks 8 [      x1
 toNBytes :: (Bits a, Num a) => Int -> a -> [a]
 toNBytes n = reverse . take n . chunkStream 8
 
-fromBase64 :: String -> [Int]
-fromBase64 "" = []
-fromBase64 (c1:c2:c3:c4:cs) = bytes ++ fromBase64 cs
-    where bytes
-           | c3 == '=' && c4 == '='
-                       = toNBytes 1 $ flip shiftR 4 $ packChunks 6 $ map fromBase64Char [c2,c1]
-           | c4 == '=' = toNBytes 2 $ flip shiftR 2 $ packChunks 6 $ map fromBase64Char [c3,c2,c1]
-           | otherwise = toNBytes 3 $                 packChunks 6 $ map fromBase64Char [c4,c3,c2,c1]
-fromBase64 _ = error "base-64 has wrong number of characters"
+fromBase64Chunk :: Char -> Char -> Char -> Char -> Either String [Int]
+fromBase64Chunk c1 c2 c3 c4
+   | c3 == '=' && c4 == '='
+               = toNBytes 1 . flip shiftR 4 . packChunks 6 <$> mapM fromBase64Char [c2,c1]
+   | c4 == '=' = toNBytes 2 . flip shiftR 2 . packChunks 6 <$> mapM fromBase64Char [c3,c2,c1]
+   | otherwise = toNBytes 3 .                 packChunks 6 <$> mapM fromBase64Char [c4,c3,c2,c1]
+
+fromBase64 :: String -> Either String [Int]
+fromBase64 "" = Right []
+fromBase64 (c1:c2:c3:c4:cs) = do
+    curBytes <- fromBase64Chunk c1 c2 c3 c4
+    restBytes <- fromBase64 cs
+    return $ curBytes ++ restBytes
+fromBase64 _ = Left "base-64 has wrong number of characters"
 
 toBase64Codex :: CxList Int -> CxList String
 toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
@@ -68,4 +73,4 @@ toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
                                                 else Left . CxBadInt $ x
 
 fromBase64Codex :: String -> CxList Int
-fromBase64Codex = mapLefts CxBadString . concatMapRights (map Right . fromBase64) . tokensOf isBase64Char
+fromBase64Codex = concatMapRights (either ((:[]) . Left . CxBadString) (map Right) . fromBase64) . mapLefts CxBadString . tokensOf isBase64Char
