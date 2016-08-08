@@ -6,6 +6,7 @@ import Control.Arrow (left)
 import Control.Applicative ((<$>))
 import Data.Char (ord)
 import Data.Maybe (fromMaybe)
+import Data.Either (rights)
 import qualified Data.Map as Map
 import Text.Read (readMaybe)
 
@@ -102,6 +103,7 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     ((Parse.caseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
 
     ("raw" : rs) -> Right (Right ((:[]) . Right . show), rs)
+    ("purify" : rs) -> Right (Right (map Right . rights), rs)
 
     (x : _) -> Left $ "Unexpected " ++ show x
     [] -> Left "Unexpected end"
@@ -139,6 +141,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
     ("negated" : rs) -> Right (Left . fmap $ fmap negate, rs)
 
     ("raw" : rs) -> Right (Right ((:[]) . Right . show), rs)
+    ("purify" : rs) -> Right (Left (map Right . rights), rs)
 
     (x : _) -> Left $ "Unexpected " ++ show x
     [] -> Left "Unexpected end"
