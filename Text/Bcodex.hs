@@ -82,6 +82,9 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     ("shift" : a : rs) -> do
         n <- expectNumberMeaningAfter "shift amount" "shift" a
         return (alphaStringCoder (+n), rs)
+    ("pshift" : a : rs) -> do
+        n <- expectNumberMeaningAfter "shift amount" "pshift" a
+        return (asciiStringCoder (+n), rs)
 
     (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
