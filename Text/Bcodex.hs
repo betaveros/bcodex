@@ -90,9 +90,16 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
 
-    (f0@(Parse.filterSynonym -> Just f) : p0 : rs) -> case Parse.charClass p0 of
-        Just p -> Right (Right . mapAllStrings $ filter (f p), rs)
+    (f0@(Parse.filterSynonym -> Just f) : p0 : rs) -> case Parse.filterType p0 of
+        Just (Parse.CharClass cc)  -> Right (Right . mapAllStrings $ filter (f . cc), rs)
+        Just (Parse.CxElemType et) -> Right (Right $ filter (f . et), rs)
         Nothing -> Left $ "Expecting character class after '" ++ f0 ++ "', got " ++ p0
+
+    ("freeze" : p0 : rs) -> case Parse.filterType p0 of
+        Just (Parse.CharClass cc)  -> Right (Right $ freezeCharClass cc, rs)
+        Just (Parse.CxElemType et) -> Right (Right $ freezeElemType et, rs)
+        Nothing -> Left $ "Expecting character class after 'freeze', got " ++ p0
+
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of
         "to" -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
         _ -> Left $ "Translate syntax should be 'translate _ to _', got " ++ show toKeyword

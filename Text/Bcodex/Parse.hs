@@ -1,11 +1,14 @@
 module Text.Bcodex.Parse (
     unpluralize, maybeUnpluralize,
-    radixTokenSynonym, charClass, baseSynonym, caseSynonym,
+    radixTokenSynonym, FilterType(..), filterType,
+    baseSynonym, caseSynonym,
     filterSynonym, arithmeticOperation) where
 
-import Data.Char (isAlpha, isDigit, isLetter, isSpace, isPunctuation, 
-    isSymbol, toUpper, toLower)
+import Data.Char (isAlpha, isDigit, isLetter, isSpace, isPunctuation,
+    isSymbol, toUpper, toLower, GeneralCategory(Space), generalCategory)
 import Text.Bcodex.Alpha
+import Text.Bcodex.Cx
+import Text.Bcodex.Utils (isRight)
 import Data.Maybe (fromMaybe)
 
 unpluralize :: String -> Maybe String
@@ -24,27 +27,42 @@ radixTokenSynonym s = case maybeUnpluralize s of
     "byte"   -> Right (16, 2)
     _        -> Left "Expecting 'bit[s]', 'byte[s]', 'digit[s]', or 'nybble[s]'"
 
-charClass :: String -> Maybe (Char -> Bool)
-charClass s = case s of
-    "space"      -> Just isSpace
-    "spaces"     -> Just isSpace
-    "whitespace" -> Just isSpace
-    "alpha"      -> Just isAlpha
-    "letter"     -> Just isLetter
-    "letters"    -> Just isLetter
-    "digit"      -> Just isDigit
-    "digits"     -> Just isDigit
-    "number"     -> Just isDigit
-    "numbers"    -> Just isDigit
-    "vowel"      -> Just isVowel
-    "vowels"     -> Just isVowel
-    "consonant"  -> Just isConsonant
-    "consonants" -> Just isConsonant
-    "punctuation"-> Just isPunctuation
-    "symbol"     -> Just isSymbol
-    "symbols"    -> Just isSymbol
-    '[':cs | last cs == ']' -> Just (`elem` init cs)
-    _ -> Nothing
+data FilterType a = CharClass (Char -> Bool) | CxElemType (CxElem a -> Bool)
+
+filterType :: String -> Maybe (FilterType a)
+filterType s = case s of
+        -- we don't want "space" to include newlines so that it's easy to target
+        -- only (horizontal) spaces and not newlines
+        "space"       -> cc $ (== Space) . generalCategory
+        "spaces"      -> cc $ (== Space) . generalCategory
+
+        "whitespace"  -> cc isSpace
+        "alpha"       -> cc isAlpha
+        "letter"      -> cc isLetter
+        "letters"     -> cc isLetter
+        "digit"       -> cc isDigit
+        "digits"      -> cc isDigit
+        "number"      -> cc isDigit
+        "numbers"     -> cc isDigit
+        "vowel"       -> cc isVowel
+        "vowels"      -> cc isVowel
+        "consonant"   -> cc isConsonant
+        "consonants"  -> cc isConsonant
+        "punctuation" -> cc isPunctuation
+        "symbol"      -> cc isSymbol
+        "symbols"     -> cc isSymbol
+        "*"           -> cc (const True)
+
+        '[':cs | last cs == ']' -> cc (`elem` init cs)
+
+        "good"    -> et isRight
+        "bad"     -> et isBad
+        "neutral" -> et isNeutral
+        "frozen"  -> et isFrozen
+        "all"     -> et (const True)
+        _ -> Nothing
+    where cc = Just . CharClass
+          et = Just . CxElemType
 
 baseSynonym :: String -> Maybe Int
 baseSynonym s = case s of
@@ -69,14 +87,14 @@ caseSynonym s = case s of
     "lowercased" -> Just toLower
     _ -> Nothing
 
-filterSynonym :: String -> Maybe ((a -> Bool) -> a -> Bool)
+filterSynonym :: String -> Maybe (Bool -> Bool)
 filterSynonym s = case s of
     "filter" -> Just id
     "keep"   -> Just id
     "only"   -> Just id
     "take"   -> Just id
-    "strip"  -> Just (not .)
-    "drop"   -> Just (not .)
+    "strip"  -> Just not
+    "drop"   -> Just not
     _        -> Nothing
 
 arithmeticOperation :: String -> Maybe (Int -> Int -> Int)

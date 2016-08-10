@@ -386,7 +386,7 @@ main = hspec $ do
             it "only has letters after filtering" $
                 forAll arbitrary (\s -> all isLetter $ codexw "filter letters" s)
             it "has no spaces after stripping" $
-                forAll arbitrary (\s -> not . any isSpace $ codexw "strip spaces" s)
+                forAll arbitrary (\s -> not . any isSpace $ codexw "strip whitespace" s)
 
         context "when round tripping to morse" $ do
             it "handles stage 1" $ do codexw "alpha to numbers" "complex" `shouldBe` "3 15 13 16 12 5 24"

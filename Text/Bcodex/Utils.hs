@@ -1,4 +1,5 @@
 module Text.Bcodex.Utils (
+    isRight,
     mapRights, mapLefts,
     bindRights, leftRight, mapLeftRight, groupRights,
     concatRights, concatMapRights,
@@ -12,6 +13,10 @@ import Control.Arrow (left, right)
 import Data.Char (chr)
 import Data.List (groupBy, unfoldr)
 import Data.Function (on)
+
+isRight :: Either a b -> Bool
+isRight (Left _) = False
+isRight (Right _) = True
 
 mapRights :: (Functor f) => (a -> b) -> f (Either c a) -> f (Either c b)
 mapRights = fmap . right

@@ -8,6 +8,7 @@ module Text.Bcodex.CxUtils (
     crunchDelimiterLefts,
     crunchMorseDelimiterLefts,
     mapAllStrings,
+    freezeCharClass, freezeElemType,
     mapExtraStringGroups, shrinkExtraSpaces, expandExtraSpaces) where
 
 import Data.Maybe (mapMaybe)
@@ -68,6 +69,25 @@ mapAllStrings f = map f'
           f' (Left  (CxDelim     s)) = Left (CxDelim     (f s))
           f' (Right s) = Right (f s)
           f' x = x
+
+freezeCharClassInElem :: (String -> CxElem String) -> (Char -> Bool) -> String -> CxList String
+freezeCharClassInElem reconstructor cc s =
+    map (either reconstructor (Left . CxFrozen)) $ tokensOf cc s
+
+freezeCharClass :: (Char -> Bool) -> CxList String -> CxList String
+freezeCharClass cc = concatMap go
+    where go (Left (CxExtra s)) = freezeCharClassInElem (Left . CxExtra) cc s
+          go (Left (CxDelim s)) = freezeCharClassInElem (Left . CxDelim) cc s
+          go (Right s) = freezeCharClassInElem Right cc s
+          go x = [x]
+
+freezeElemType :: (CxElem String -> Bool) -> CxList String -> CxList String
+freezeElemType et = map go
+    where go e = if et e then freeze e else e
+          freeze (Left (CxExtra s)) = Left (CxFrozen s)
+          freeze (Left (CxDelim s)) = Left (CxFrozen s)
+          freeze (Right s) = Left (CxFrozen s)
+          freeze x = x
 
 mapExtraStringGroups :: (String -> String) -> CxList a -> CxList a
 mapExtraStringGroups f = mapExtraStrings f . concatExtraStrings
