@@ -37,6 +37,8 @@ filterType s = case s of
         "spaces"      -> cc $ (== Space) . generalCategory
 
         "whitespace"  -> cc isSpace
+        "newline"     -> cc $ (`elem` "\n\r")
+        "newlines"    -> cc $ (`elem` "\n\r")
         "alpha"       -> cc isAlpha
         "letter"      -> cc isLetter
         "letters"     -> cc isLetter
