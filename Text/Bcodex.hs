@@ -1,6 +1,6 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE ViewPatterns #-}
-module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, parseCharCoder, parseIntCoder, codex) where
+module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, applyCxCoderToString, parseCharCoder, parseIntCoder, codex) where
 -- imports {{{
 import Control.Arrow (left)
 import Control.Applicative ((<$>))
@@ -50,10 +50,11 @@ rcompose f (Right f') = Right (f' . f)
 applyCxCoder :: CxCoder a -> CxList a -> Either (CxList Int) (CxList Char)
 applyCxCoder = either (Left .) (Right .)
 
-applyCxCoderToString :: CxCoder Char -> String -> String
-applyCxCoderToString c = case c of
-    Left  f -> concatMap (either showCxLeft show)  . f . map Right
-    Right f -> concatMap (either showCxLeft (:[])) . f . map Right
+applyCxCoderToString :: (CxLeft -> String) -> ([Int] -> String) -> (String -> String) -> CxCoder Char -> String -> String
+applyCxCoderToString showLeft showInts showChars c = case c of
+        Left f  -> go showInts f
+        Right f -> go showChars f
+    where go showRightGroup f = concatMap (either showLeft showRightGroup) . groupRights . f . map Right
 -- }}}
 -- parsing command line args (synonyms etc.) {{{
 expectNumberMeaningAfter :: String -> String -> String -> Either String Int
@@ -171,5 +172,5 @@ parseIntCoder [] = Right (Left id)
 parseIntCoder s = parseSingleIntCoder s >>= uncurry parseCoderAfter
 -- }}}
 codex :: [String] -> Either String (String -> String)
-codex args = applyCxCoderToString <$> parseCharCoder args
+codex args = applyCxCoderToString showCxLeft (unwords . map show) id <$> parseCharCoder args
 -- vim:set fdm=marker:

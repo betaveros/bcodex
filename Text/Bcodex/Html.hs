@@ -1,6 +1,8 @@
 module Text.Bcodex.Html (ampEscape, showCxLeftAsHtml, codexHtml) where
 
 import Text.Bcodex
+import Data.List (intercalate)
+import Text.Bcodex.Utils (groupRights)
 
 ampEscape :: String -> String
 ampEscape = concatMap esc
@@ -18,12 +20,13 @@ showCxLeftAsHtml (CxBadString s) = classed "bs" $ "{" ++ s ++ "}"
 showCxLeftAsHtml (CxExtra s) = classed "ex" s
 showCxLeftAsHtml (CxDelim s) = classed "de" s
 showCxLeftAsHtml (CxBadInt n) = classed "bi" $ "[" ++ show n ++ "]"
+showCxLeftAsHtml (CxFrozen c) = classed "fr" [c]
 
-applyCxCoderToStringAsHtml :: CxCoder a -> a -> String
-applyCxCoderToStringAsHtml c = case c of
-        Left f  -> go (classed "ri" . show) f
-        Right f -> go (classed "rs") f
-    where go showRight f = concatMap (either showCxLeftAsHtml showRight) . f . (:[]) . Right
+showIntsAsHtml :: [Int] -> String
+showIntsAsHtml = classed "ri" . unwords . map show
+
+showCharsAsHtml :: String -> String
+showCharsAsHtml = classed "rs"
 
 codexHtml :: [String] -> Either String (String -> String)
-codexHtml args = applyCxCoderToStringAsHtml <$> parseStringCoder args
+codexHtml args = applyCxCoderToString showCxLeftAsHtml showIntsAsHtml showCharsAsHtml <$> parseCharCoder args
