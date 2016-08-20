@@ -2,14 +2,14 @@ module Text.Bcodex.Cx (CxLeft(..), CxElem, CxList, showCxLeft,
     isCxLeftBad, isBad, isCxLeftNeutral, isNeutral,
     isCxLeftFrozen, isFrozen) where
 
-data CxLeft = CxBadString String | CxExtra String | CxDelim String | CxBadInt Int | CxFrozen String deriving (Eq, Ord, Show)
+data CxLeft = CxBadString String | CxExtra String | CxDelim String | CxBadInt Int | CxFrozen Char deriving (Eq, Ord, Show)
 
 showCxLeft :: CxLeft -> String
 showCxLeft (CxBadString s) = "{" ++ s ++ "}"
 showCxLeft (CxExtra s) = s
 showCxLeft (CxDelim s) = s
 showCxLeft (CxBadInt n) = "[" ++ show n ++ "]"
-showCxLeft (CxFrozen s) = s
+showCxLeft (CxFrozen s) = [s]
 
 type CxElem a = Either CxLeft a
 type CxList a = [CxElem a]

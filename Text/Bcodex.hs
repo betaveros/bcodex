@@ -1,10 +1,10 @@
 #!/usr/bin/env runhaskell
 {-# LANGUAGE ViewPatterns #-}
-module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, parseStringCoder, parseIntCoder, codex) where
+module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, parseCharCoder, parseIntCoder, codex) where
 -- imports {{{
 import Control.Arrow (left)
 import Control.Applicative ((<$>))
-import Data.Char (ord)
+import Data.Char (ord, chr)
 import Data.Maybe (fromMaybe)
 import Data.Either (rights)
 import qualified Data.Map as Map
@@ -35,25 +35,25 @@ unpl :: String -> String
 unpl = Parse.maybeUnpluralize
 -- }}}
 -- CxCoders {{{
-type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList String)
+type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList Char)
 
-alphaStringCoder :: (Int -> Int) -> CxCoder String
-alphaStringCoder = Right . fmap . fmap . fmap . mapUnderAlpha
+alphaStringCoder :: (Int -> Int) -> CxCoder Char
+alphaStringCoder = Right . fmap . fmap . mapUnderAlpha
 
-asciiStringCoder :: (Int -> Int) -> CxCoder String
-asciiStringCoder = Right . fmap . fmap . fmap . mapUnderAscii
+asciiStringCoder :: (Int -> Int) -> CxCoder Char
+asciiStringCoder = Right . fmap . fmap . mapUnderAscii
 
 rcompose :: (CxList a -> CxList b) -> CxCoder b -> CxCoder a
 rcompose f (Left f') = Left (f' . f)
 rcompose f (Right f') = Right (f' . f)
 
-applyCxCoder :: CxCoder a -> CxList a -> Either (CxList Int) (CxList String)
+applyCxCoder :: CxCoder a -> CxList a -> Either (CxList Int) (CxList Char)
 applyCxCoder = either (Left .) (Right .)
 
-applyCxCoderToString :: CxCoder a -> a -> String
+applyCxCoderToString :: CxCoder Char -> String -> String
 applyCxCoderToString c = case c of
-    Left f ->  concatMap (either showCxLeft show) . f . (:[]) . Right
-    Right f -> concatMap (either showCxLeft id)  . f . (:[]) . Right
+    Left  f -> concatMap (either showCxLeft show)  . f . map Right
+    Right f -> concatMap (either showCxLeft (:[])) . f . map Right
 -- }}}
 -- parsing command line args (synonyms etc.) {{{
 expectNumberMeaningAfter :: String -> String -> String -> Either String Int
@@ -61,11 +61,11 @@ expectNumberMeaningAfter m s t = case readInt t of
     Just n -> Right n
     Nothing -> Left $ "Expecting number (" ++ m ++ ") after '" ++ s ++ "', got unexpected " ++ show t
 
-parseSingleStringCoder :: [String] -> Either String (CxCoder String, [String])
-parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s of
-    ((Parse.radixTokenSynonym -> Right (r, a)) : rs) -> Right (Left $ concatMapRights (fromRadixStream r a) . concatRights, rs)
+parseSingleCharCoder :: [String] -> Either String (CxCoder Char, [String])
+parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
+    ((Parse.radixTokenSynonym -> Right (r, a)) : rs) -> Right (Left $ concatMapRights (fromRadixStream r a) . groupRights, rs)
     ((readInt -> Just n) : tokenstr : rs) -> case Parse.radixTokenSynonym tokenstr of
-        Right (r, a) -> Right (Left . concatMapRights $ fromRadixStream r (a*n), rs)
+        Right (r, a) -> Right (Left $ concatMapRights (fromRadixStream r (a*n)) . groupRights, rs)
         Left e -> Left $ e ++ " after number " ++ show n ++ ", got " ++ show tokenstr
 
     ((Parse.baseSynonym -> Just b) : rs) -> Right (Left $ fromRadixNumbersCodex b, rs)
@@ -73,8 +73,8 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
         b <- expectNumberMeaningAfter "radix" "base" bstr
         Right (Left $ fromRadixNumbersCodex b, rs)
 
-    ((unpl -> "char") : rs) -> Right (Left . concatMapRights $ map (Right . ord), rs)
-    ("base64" : rs) -> Right (Left (concatMapRights fromBase64Codex . concatRights), rs)
+    ((unpl -> "char") : rs) -> Right (Left . bindRights $ Right . ord, rs)
+    ("base64" : rs) -> Right (Left (concatMapRights fromBase64Codex . groupRights), rs)
 
     ("alpha" : rs) -> Right (Left fromAlphaStreamCodex, rs)
     ("rot13" : rs)  -> Right (alphaStringCoder (+13), rs)
@@ -91,7 +91,7 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
 
     (f0@(Parse.filterSynonym -> Just f) : p0 : rs) -> case Parse.filterType p0 of
-        Just (Parse.CharClass cc)  -> Right (Right . mapAllStrings $ filter (f . cc), rs)
+        Just (Parse.CharClass cc)  -> Right (Right . concatMapAllChars $ filter (f . cc) . (:[]), rs)
         Just (Parse.CxElemType et) -> Right (Right $ filter (f . et), rs)
         Nothing -> Left $ "Expecting character class after '" ++ f0 ++ "', got " ++ p0
 
@@ -105,15 +105,15 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
         Nothing -> Left $ "Expecting character class or elem type after 'unfreeze', got " ++ p0
 
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of
-        "to" -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
+        "to" -> Right (Right . mapAllChars $ translate csFrom csTo, rs)
         _ -> Left $ "Translate syntax should be 'translate _ to _', got " ++ show toKeyword
     ("split-lines" : rs) ->
-        Right (Right . mapAllStrings $ map (\x -> case x of
+        Right (Right . mapAllChars $ (\x -> case x of
             ' ' -> '\n'
             _   -> x), rs)
-    ((Parse.caseSynonym -> Just f) : rs) -> Right (Right . mapAllStrings $ map f, rs)
+    ((Parse.caseSynonym -> Just f) : rs) -> Right (Right . mapAllChars $ f, rs)
 
-    ("raw" : rs) -> Right (Right ((:[]) . Right . show), rs)
+    ("raw" : rs) -> Right (Right (map Right . show), rs)
     ("purify" : rs) -> Right (Right (map Right . rights), rs)
 
     (x : _) -> Left $ "Unexpected " ++ show x
@@ -132,8 +132,8 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((Parse.baseSynonym -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
         ("base" : (readInt -> Just b) : rs) -> Right (Right $ toRadixNumbers b, rs)
 
-        ((unpl -> "char"  ) : rs) -> Right (Right $ mapRights chrString . crunchDelimiterLefts, rs)
-        ((unpl -> "printable"  ) : rs) -> Right (Right $ bindRights visiblePrintableChrString . crunchDelimiterLefts, rs)
+        ((unpl -> "char"  ) : rs) -> Right (Right $ mapRights chr . crunchDelimiterLefts, rs)
+        ((unpl -> "printable"  ) : rs) -> Right (Right $ bindRights visiblePrintableChr . crunchDelimiterLefts, rs)
 
         ((unpl -> "alpha" ) : rs) -> Right (Right   toAlphaStream, rs)
         ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
@@ -151,7 +151,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
     ("negate"  : rs) -> Right (Left . fmap $ fmap negate, rs)
     ("negated" : rs) -> Right (Left . fmap $ fmap negate, rs)
 
-    ("raw" : rs) -> Right (Right ((:[]) . Right . show), rs)
+    ("raw" : rs) -> Right (Right (map Right . show), rs)
     ("purify" : rs) -> Right (Left (map Right . rights), rs)
 
     (x : _) -> Left $ "Unexpected " ++ show x
@@ -160,16 +160,16 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
 parseCoderAfter :: CxCoder a -> [String] -> Either String (CxCoder a)
 parseCoderAfter c rs = case c of
     Left  f -> rcompose f <$> parseIntCoder rs
-    Right f -> rcompose f <$> parseStringCoder rs
+    Right f -> rcompose f <$> parseCharCoder rs
 
-parseStringCoder :: [String] -> Either String (CxCoder String)
-parseStringCoder [] = Right (Right id)
-parseStringCoder s = parseSingleStringCoder s >>= uncurry parseCoderAfter
+parseCharCoder :: [String] -> Either String (CxCoder Char)
+parseCharCoder [] = Right (Right id)
+parseCharCoder s = parseSingleCharCoder s >>= uncurry parseCoderAfter
 
 parseIntCoder :: [String] -> Either String (CxCoder Int)
 parseIntCoder [] = Right (Left id)
 parseIntCoder s = parseSingleIntCoder s >>= uncurry parseCoderAfter
 -- }}}
 codex :: [String] -> Either String (String -> String)
-codex args = applyCxCoderToString <$> parseStringCoder args
+codex args = applyCxCoderToString <$> parseCharCoder args
 -- vim:set fdm=marker:

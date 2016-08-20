@@ -62,11 +62,11 @@ intToAlphaString = fmap str1 . intToAlpha
 intToUpperAlphaString :: Int -> CxElem String
 intToUpperAlphaString = fmap str1 . intToUpperAlpha
 
-fromAlphaStreamCodex :: CxList String -> CxList Int
-fromAlphaStreamCodex = concatExtraStrings . concatMapRights fromAlphaStream
+fromAlphaStreamCodex :: CxList Char -> CxList Int
+fromAlphaStreamCodex = concatExtraStrings . concatMapRights fromAlphaStream . groupRights
 
-toAlphaStream :: CxList Int -> CxList String
-toAlphaStream = bindRights intToAlphaString . crunchDelimiterLefts
+toAlphaStream :: CxList Int -> CxList Char
+toAlphaStream = bindRights intToAlpha . crunchDelimiterLefts
 
-toUpperAlphaStream :: CxList Int -> CxList String
-toUpperAlphaStream = bindRights intToUpperAlphaString . crunchDelimiterLefts
+toUpperAlphaStream :: CxList Int -> CxList Char
+toUpperAlphaStream = bindRights intToUpperAlpha . crunchDelimiterLefts

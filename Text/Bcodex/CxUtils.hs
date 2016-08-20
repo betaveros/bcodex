@@ -7,7 +7,8 @@ module Text.Bcodex.CxUtils (
     delimOrShrink,
     crunchDelimiterLefts,
     crunchMorseDelimiterLefts,
-    mapAllStrings,
+    concatMapAllChars,
+    mapAllChars,
     freezeCharClass, freezeElemType,
     unfreezeCharClass, unfreezeElemType,
     mapExtraStringGroups, shrinkExtraSpaces, expandExtraSpaces) where
@@ -63,45 +64,50 @@ crunchMorseDelimiterLefts = mapMaybe f
           f (Left (CxExtra " / ")) = Just (Left (CxDelim " "))
           f x = Just x
 
-mapAllStrings :: (String -> String) -> CxList String -> CxList String
-mapAllStrings f = map f'
-    where f' (Left  (CxBadString s)) = Left (CxBadString (f s))
-          f' (Left  (CxExtra     s)) = Left (CxExtra     (f s))
-          f' (Left  (CxDelim     s)) = Left (CxDelim     (f s))
+concatMapAllChars :: (Char -> String) -> CxList Char -> CxList Char
+concatMapAllChars f = concatMap f' -- TODO: clean up leftover empty Lefts?
+    where f' (Left  (CxBadString s)) = [Left (CxBadString (cmf s))]
+          f' (Left  (CxExtra     s)) = [Left (CxExtra     (cmf s))]
+          f' (Left  (CxDelim     s)) = [Left (CxDelim     (cmf s))]
+          f' (Right c) = map Right $ f c
+          f' x = [x]
+          cmf = concatMap f
+
+mapAllChars :: (Char -> Char) -> CxList Char -> CxList Char
+mapAllChars f = map f'
+    where f' (Left  (CxBadString s)) = Left (CxBadString (map f s))
+          f' (Left  (CxExtra     s)) = Left (CxExtra     (map f s))
+          f' (Left  (CxDelim     s)) = Left (CxDelim     (map f s))
           f' (Right s) = Right (f s)
           f' x = x
 
-freezeCharClassInElem :: (String -> CxElem String) -> (Char -> Bool) -> String -> CxList String
+freezeCharClassInElem :: (String -> CxElem Char) -> (Char -> Bool) -> String -> CxList Char
 freezeCharClassInElem reconstructor cc s =
-    map (either reconstructor (Left . CxFrozen)) $ tokensOf cc s
+    concatMap (either ((:[]) . reconstructor) (map (Left . CxFrozen))) $ tokensOf cc s
 
-unfreezeCharClassInElem :: (Char -> Bool) -> String -> CxList String
-unfreezeCharClassInElem cc s =
-    map (either (Left . CxFrozen) Right) $ tokensOf cc s
-
-freezeCharClass :: (Char -> Bool) -> CxList String -> CxList String
+freezeCharClass :: (Char -> Bool) -> CxList Char -> CxList Char
 freezeCharClass cc = concatMap go
     where go (Left (CxExtra s)) = freezeCharClassInElem (Left . CxExtra) cc s
           go (Left (CxDelim s)) = freezeCharClassInElem (Left . CxDelim) cc s
-          go (Right s) = freezeCharClassInElem Right cc s
+          go e@(Right c) = [if cc c then Left (CxFrozen c) else e]
           go x = [x]
 
-unfreezeCharClass :: (Char -> Bool) -> CxList String -> CxList String
-unfreezeCharClass cc = concatMap go
-    where go (Left (CxFrozen s)) = unfreezeCharClassInElem cc s
-          go x = [x]
+unfreezeCharClass :: (Char -> Bool) -> CxList Char -> CxList Char
+unfreezeCharClass cc = map go
+    where go e@(Left (CxFrozen c)) = if cc c then Right c else e
+          go x = x
 
-freezeElemType :: (CxElem String -> Bool) -> CxList String -> CxList String
-freezeElemType et = map go
-    where go e = if et e then freeze e else e
-          freeze (Left (CxExtra s)) = Left (CxFrozen s)
-          freeze (Left (CxDelim s)) = Left (CxFrozen s)
-          freeze (Right s) = Left (CxFrozen s)
-          freeze x = x
+freezeElemType :: (CxElem Char -> Bool) -> CxList Char -> CxList Char
+freezeElemType et = concatMap go
+    where go e = if et e then freeze e else [e]
+          freeze (Left (CxExtra s)) = map (Left . CxFrozen) s
+          freeze (Left (CxDelim s)) = map (Left . CxFrozen) s
+          freeze (Right c) = [Left (CxFrozen c)]
+          freeze x = [x]
 
-unfreezeElemType :: (CxElem String -> Bool) -> CxList String -> CxList String
+unfreezeElemType :: (CxElem Char -> Bool) -> CxList Char -> CxList Char
 unfreezeElemType et = map go
-    where go e@(Left (CxFrozen s)) = if et e then Right s else e
+    where go e@(Left (CxFrozen c)) = if et e then Right c else e
           go x = x
 
 mapExtraStringGroups :: (String -> String) -> CxList a -> CxList a

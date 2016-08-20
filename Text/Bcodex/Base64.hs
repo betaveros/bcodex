@@ -67,8 +67,8 @@ fromBase64 (c1:c2:c3:c4:cs) = do
     return $ curBytes ++ restBytes
 fromBase64 _ = Left "base-64 has wrong number of characters"
 
-toBase64Codex :: CxList Int -> CxList String
-toBase64Codex = mapRights toBase64 . groupRights . bindRights ensureBase64
+toBase64Codex :: CxList Int -> CxList Char
+toBase64Codex = ungroupRights . mapRights toBase64 . groupRights . bindRights ensureBase64
     where ensureBase64 x = if 0 <= x && x < 256 then Right x
                                                 else Left . CxBadInt $ x
 

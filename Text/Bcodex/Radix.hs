@@ -69,32 +69,32 @@ fromRadixStream :: Int -> Int -> String -> CxList Int
 fromRadixStream radix blockSize
     = concatMapRights (fromRadixToken radix blockSize) . mapLefts extraOrDelim . tokensOf (isGenDigit radix)
 
-toRadixStream :: Int -> CxList Int -> CxList String
+toRadixStream :: Int -> CxList Int -> CxList Char
 toRadixStream radix
-    = map (fmap intToGenDigitString . (asSingleBaseDigit radix =<<)) . crunchDelimiterLefts
-toUpperRadixStream :: Int -> CxList Int -> CxList String
-toUpperRadixStream radix = mapRights (map toUpper) . toRadixStream radix
+    = map (fmap intToGenDigit . (asSingleBaseDigit radix =<<)) . crunchDelimiterLefts
+toUpperRadixStream :: Int -> CxList Int -> CxList Char
+toUpperRadixStream radix = mapRights toUpper . toRadixStream radix
 
 toRadixToken :: Int -> Int -> Int -> CxElem String
 toRadixToken radix blockSize =
     fmap (map intToGenDigit) . asBaseDigitsSized radix blockSize
 
-toRadixTokens :: Int -> Int -> CxList Int -> CxList String
+toRadixTokens :: Int -> Int -> CxList Int -> CxList Char
 toRadixTokens radix blockSize
-    = intersperseDelimSpaces . bindRights (toRadixToken radix blockSize)
-toUpperRadixTokens :: Int -> Int -> CxList Int -> CxList String
-toUpperRadixTokens radix blockSize = mapRights (map toUpper) . toRadixTokens radix blockSize
+    = ungroupRights . intersperseDelimSpaces . bindRights (toRadixToken radix blockSize)
+toUpperRadixTokens :: Int -> Int -> CxList Int -> CxList Char
+toUpperRadixTokens radix blockSize = mapRights toUpper . toRadixTokens radix blockSize
 
 fromRadixNumbers :: Int -> String -> CxList Int
 fromRadixNumbers radix
     = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map genDigitToInt)) . tokensOf (isGenDigit radix)
 
-fromRadixNumbersCodex :: Int -> CxList String -> CxList Int
-fromRadixNumbersCodex radix = concatMapRights (fromRadixNumbers radix) . concatRights . shrinkExtraSpaces
+fromRadixNumbersCodex :: Int -> CxList Char -> CxList Int
+fromRadixNumbersCodex radix = concatMapRights (fromRadixNumbers radix) . groupRights . shrinkExtraSpaces
 
 intToGenDigitString :: Int -> String
 intToGenDigitString = str1 . intToGenDigit
 
-toRadixNumbers :: Int -> CxList Int -> CxList String
+toRadixNumbers :: Int -> CxList Int -> CxList Char
 toRadixNumbers radix
-    = expandExtraSpaces . intersperseDelimSpaces . mapRights (map intToGenDigit . asBaseDigits radix)
+    = expandExtraSpaces . ungroupRights . intersperseDelimSpaces . mapRights (map intToGenDigit . asBaseDigits radix)

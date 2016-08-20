@@ -3,7 +3,9 @@ import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
 import Text.Bcodex
+import Text.Bcodex.Utils
 import Data.Char
+import Control.Arrow (right)
 
 main :: IO ()
 main = hspec $ do
@@ -107,9 +109,9 @@ main = hspec $ do
 
         context "when working with morse" $ do
             it "can convert from morse" $
-                aps "morse" [Right "--- .-. --.."] `shouldBe` Right [Right "o", Right "r", Right "z"]
+                aps "morse" [Right "--- .-. --.."] `shouldBe` Right [Right "orz"]
             it "can convert from weird morse" $
-                aps "morse" [Right "---.. ...- -.--.-"] `shouldBe` Right [Right "8", Right "v", Right ")"]
+                aps "morse" [Right "---.. ...- -.--.-"] `shouldBe` Right [Right "8v)"]
             it "can convert to morse" $
                 aps "to morse" [Right "orz"] `shouldBe` Right [Right "---", Left (CxDelim " "), Right ".-.", Left (CxDelim " "), Right "--.."]
             it "can convert to weird morse" $
@@ -141,9 +143,9 @@ main = hspec $ do
 
     describe "parseIntCoder" $ do
         context "when working with letters" $ do
-            it "works" $ api "to alpha" [Right 15, Right 18, Right 26] `shouldBe` Right [Right "o", Right "r", Right "z"]
+            it "works" $ api "to alpha" [Right 15, Right 18, Right 26] `shouldBe` Right [Right "orz"]
 
-            it "eliminates small delimiters" $ api "to alpha" [Right 3, Left (CxDelim " "), Right 24] `shouldBe` Right [Right "c", Right "x"]
+            it "eliminates small delimiters" $ api "to alpha" [Right 3, Left (CxDelim " "), Right 24] `shouldBe` Right [Right "cx"]
             it "shrinks spaces" $ do
                 api "to alpha" [Left (CxDelim "  ")] `shouldBe` Right [Left (CxExtra " ")]
                 api "to alpha" [Right 1, Left (CxDelim "  "), Right 2] `shouldBe` Right [Right "a", Left (CxExtra " "), Right "b"]
@@ -151,9 +153,9 @@ main = hspec $ do
                 api "to alpha" [Left (CxExtra "  ")] `shouldBe` Right [Left (CxExtra "  ")]
 
         context "when working with chars" $ do
-            it "works" $ api "to chars" [Right 0x38, Right 0x76, Right 0x29] `shouldBe` Right [Right "8", Right "v", Right ")"]
+            it "works" $ api "to chars" [Right 0x38, Right 0x76, Right 0x29] `shouldBe` Right [Right "8v)"]
 
-            it "eliminates small delimiters" $ api "to chars" [Right 0x3a, Left (CxDelim " "), Right 0x44] `shouldBe` Right [Right ":", Right "D"]
+            it "eliminates small delimiters" $ api "to chars" [Right 0x3a, Left (CxDelim " "), Right 0x44] `shouldBe` Right [Right ":D"]
             it "shrinks spaces" $ do
                 api "to chars" [Left (CxDelim "  ")] `shouldBe` Right [Left (CxExtra " ")]
                 api "to chars" [Right 0x3e, Left (CxDelim "  "), Right 0x3c] `shouldBe` Right [Right ">", Left (CxExtra " "), Right "<"]
@@ -185,16 +187,16 @@ main = hspec $ do
 
         context "when working with streams of digits" $ do
             it "works with bits" $
-                api "to bits" [Right 1, Right 0] `shouldBe` Right [Right "1", Right "0"]
+                api "to bits" [Right 1, Right 0] `shouldBe` Right [Right "10"]
             it "works with nybbles" $
-                api "to nybbles" [Right 12, Right 0, Right 13, Right 14] `shouldBe` Right [Right "c", Right "0", Right "d", Right "e"]
+                api "to nybbles" [Right 12, Right 0, Right 13, Right 14] `shouldBe` Right [Right "c0de"]
             it "works with Nybbles" $
-                api "to Nybbles" [Right 12, Right 0, Right 13, Right 14] `shouldBe` Right [Right "C", Right "0", Right "D", Right "E"]
+                api "to Nybbles" [Right 12, Right 0, Right 13, Right 14] `shouldBe` Right [Right "C0DE"]
 
             it "eliminates small delimiter spaces" $
-                api "to nybbles" [Right 7, Left (CxDelim " "), Right 15] `shouldBe` Right [Right "7", Right "f"]
+                api "to nybbles" [Right 7, Left (CxDelim " "), Right 15] `shouldBe` Right [Right "7f"]
             it "eliminates small delimiter commas" $
-                api "to nybbles" [Right 7, Left (CxDelim ","), Right 15] `shouldBe` Right [Right "7", Right "f"]
+                api "to nybbles" [Right 7, Left (CxDelim ","), Right 15] `shouldBe` Right [Right "7f"]
 
         context "when working with tokens of digits" $ do
             it "works with bits" $
@@ -400,7 +402,10 @@ main = hspec $ do
             it "handles stage 3" $ do codexw "chars to bytes chars to bytes bytes to chars" "6*9=42" `shouldBe` "362a393d3432"
             it "handles stage 4" $ do codexw "chars to bytes chars to bytes bytes to chars bytes to chars" "6*9=42" `shouldBe` "6*9=42"
 
-    where aps = applyCxCoder . either error id . parseStringCoder . words
-          api = applyCxCoder . either error id . parseIntCoder . words
+    where aps :: String -> CxList String -> Either (CxList Int) (CxList String)
+          aps = (right groupRights .) . (. ungroupRights) . applyCxCoder . either error id . parseCharCoder . words
+          api :: String -> CxList Int -> Either (CxList Int) (CxList String)
+          api = (right groupRights .) . applyCxCoder . either error id . parseIntCoder . words
+          codexw :: String -> String -> String
           codexw = either error id . codex . words
 
