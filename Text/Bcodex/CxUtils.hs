@@ -9,6 +9,7 @@ module Text.Bcodex.CxUtils (
     crunchMorseDelimiterLefts,
     mapAllStrings,
     freezeCharClass, freezeElemType,
+    unfreezeCharClass, unfreezeElemType,
     mapExtraStringGroups, shrinkExtraSpaces, expandExtraSpaces) where
 
 import Data.Maybe (mapMaybe)
@@ -74,11 +75,20 @@ freezeCharClassInElem :: (String -> CxElem String) -> (Char -> Bool) -> String -
 freezeCharClassInElem reconstructor cc s =
     map (either reconstructor (Left . CxFrozen)) $ tokensOf cc s
 
+unfreezeCharClassInElem :: (Char -> Bool) -> String -> CxList String
+unfreezeCharClassInElem cc s =
+    map (either (Left . CxFrozen) Right) $ tokensOf cc s
+
 freezeCharClass :: (Char -> Bool) -> CxList String -> CxList String
 freezeCharClass cc = concatMap go
     where go (Left (CxExtra s)) = freezeCharClassInElem (Left . CxExtra) cc s
           go (Left (CxDelim s)) = freezeCharClassInElem (Left . CxDelim) cc s
           go (Right s) = freezeCharClassInElem Right cc s
+          go x = [x]
+
+unfreezeCharClass :: (Char -> Bool) -> CxList String -> CxList String
+unfreezeCharClass cc = concatMap go
+    where go (Left (CxFrozen s)) = unfreezeCharClassInElem cc s
           go x = [x]
 
 freezeElemType :: (CxElem String -> Bool) -> CxList String -> CxList String
@@ -88,6 +98,11 @@ freezeElemType et = map go
           freeze (Left (CxDelim s)) = Left (CxFrozen s)
           freeze (Right s) = Left (CxFrozen s)
           freeze x = x
+
+unfreezeElemType :: (CxElem String -> Bool) -> CxList String -> CxList String
+unfreezeElemType et = map go
+    where go e@(Left (CxFrozen s)) = if et e then Right s else e
+          go x = x
 
 mapExtraStringGroups :: (String -> String) -> CxList a -> CxList a
 mapExtraStringGroups f = mapExtraStrings f . concatExtraStrings

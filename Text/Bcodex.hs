@@ -98,7 +98,11 @@ parseSingleStringCoder s = left ("Could not parse string coder: " ++) $ case s o
     ("freeze" : p0 : rs) -> case Parse.filterType p0 of
         Just (Parse.CharClass cc)  -> Right (Right $ freezeCharClass cc, rs)
         Just (Parse.CxElemType et) -> Right (Right $ freezeElemType et, rs)
-        Nothing -> Left $ "Expecting character class after 'freeze', got " ++ p0
+        Nothing -> Left $ "Expecting character class or elem type after 'freeze', got " ++ p0
+    ("unfreeze" : p0 : rs) -> case Parse.filterType p0 of
+        Just (Parse.CharClass cc)  -> Right (Right $ unfreezeCharClass cc, rs)
+        Just (Parse.CxElemType et) -> Right (Right $ unfreezeElemType et, rs)
+        Nothing -> Left $ "Expecting character class or elem type after 'unfreeze', got " ++ p0
 
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of
         "to" -> Right (Right . mapAllStrings $ map (translate csFrom csTo), rs)
