@@ -1,7 +1,7 @@
 module Text.Bcodex.CxUtils (
     CxLeft(..), CxElem, CxList, showCxLeft,
     mapExtraStrings,
-    intersperseDelimSpaces,
+    intersperseDelimSpaces, ungroupWithDelimSpaces,
     concatExtraStrings,
     extraOrDelim,
     delimOrShrink,
@@ -25,6 +25,9 @@ mapExtraStrings f = fmap f'
 
 intersperseDelimSpaces :: CxList a -> CxList a
 intersperseDelimSpaces = intersperseBetweenRights $ Left (CxDelim " ")
+
+ungroupWithDelimSpaces :: CxList [a] -> CxList a
+ungroupWithDelimSpaces = ungroupRights . intersperseDelimSpaces
 
 concatExtraStrings :: CxList a -> CxList a
 concatExtraStrings [] = []
@@ -65,13 +68,14 @@ crunchMorseDelimiterLefts = mapMaybe f
           f x = Just x
 
 concatMapAllChars :: (Char -> String) -> CxList Char -> CxList Char
-concatMapAllChars f = concatMap f' -- TODO: clean up leftover empty Lefts?
-    where f' (Left  (CxBadString s)) = [Left (CxBadString (cmf s))]
-          f' (Left  (CxExtra     s)) = [Left (CxExtra     (cmf s))]
-          f' (Left  (CxDelim     s)) = [Left (CxDelim     (cmf s))]
+concatMapAllChars f = concatMap f'
+    where f' (Left  (CxBadString s)) = wrap (Left . CxBadString) $ cmf s
+          f' (Left  (CxExtra     s)) = wrap (Left . CxExtra)     $ cmf s
+          f' (Left  (CxDelim     s)) = wrap (Left . CxDelim)     $ cmf s
           f' (Right c) = map Right $ f c
           f' x = [x]
           cmf = concatMap f
+          wrap c r = [c r | not (null r)]
 
 mapAllChars :: (Char -> Char) -> CxList Char -> CxList Char
 mapAllChars f = map f'

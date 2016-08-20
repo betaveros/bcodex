@@ -3,7 +3,6 @@ module Text.Bcodex.Alpha (
     mod1, alphaToInt, alphaToElem, mapUnderAlpha,
     intToAlpha, intToUpperAlpha,
     fromAlphaStream,
-    intToAlphaString, intToUpperAlphaString,
     fromAlphaStreamCodex,
     toAlphaStream, toUpperAlphaStream) where
 import Data.Char (ord, chr, toUpper, isLetter)
@@ -56,14 +55,8 @@ intToUpperAlpha = fmap toUpper . intToAlpha
 fromAlphaStream :: String -> CxList Int
 fromAlphaStream = map alphaToElem
 
-intToAlphaString :: Int -> CxElem String
-intToAlphaString = fmap str1 . intToAlpha
-
-intToUpperAlphaString :: Int -> CxElem String
-intToUpperAlphaString = fmap str1 . intToUpperAlpha
-
 fromAlphaStreamCodex :: CxList Char -> CxList Int
-fromAlphaStreamCodex = concatExtraStrings . concatMapRights fromAlphaStream . groupRights
+fromAlphaStreamCodex = concatExtraStrings . concatMapGroupedRights fromAlphaStream
 
 toAlphaStream :: CxList Int -> CxList Char
 toAlphaStream = bindRights intToAlpha . crunchDelimiterLefts

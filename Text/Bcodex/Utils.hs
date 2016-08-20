@@ -2,15 +2,15 @@ module Text.Bcodex.Utils (
     isRight,
     mapRights, mapLefts,
     bindRights, leftRight, mapLeftRight, groupRights,
-    concatRights, concatMapRights,
+    concatMapRights, concatMapGroupedRights,
+    mapOverGroupedRights,
     intersperseBetweenRights,
     ungroupRights, isDelimiter,
-    str1, chrString, tokensOf, splitInto,
+    tokensOf, splitInto,
     shrinkSpaces, expandSpaces
     ) where
 
 import Control.Arrow (left, right)
-import Data.Char (chr)
 import Data.List (groupBy, unfoldr)
 import Data.Function (on)
 
@@ -24,6 +24,7 @@ mapRights = fmap . right
 mapLefts :: (Functor f) => (a -> b) -> f (Either a c) -> f (Either b c)
 mapLefts = fmap . left
 
+-- bindRights :: (a -> CxElem b) -> CxList a -> CxList b
 bindRights :: (Functor f) => (a -> Either c b) -> f (Either c a) -> f (Either c b)
 bindRights = fmap . (=<<)
 
@@ -41,13 +42,16 @@ groupRights (Right r : xs) =
         (Right rs : gps) -> Right (r:rs) : gps
         gps -> Right [r] : gps
 
-concatRights :: [Either a [b]] -> [Either a [b]]
-concatRights = mapRights concat . groupRights
-
 concatMapRights :: (b -> [Either a c]) -> [Either a b] -> [Either a c]
 concatMapRights f = concatMap ff
     where ff (Right s) = f s
           ff (Left x)  = [Left x]
+
+concatMapGroupedRights :: ([b] -> [Either a c]) -> [Either a b] -> [Either a c]
+concatMapGroupedRights f = concatMapRights f . groupRights
+
+mapOverGroupedRights :: ([b] -> [c]) -> [Either a b] -> [Either a c]
+mapOverGroupedRights f = ungroupRights . mapRights f . groupRights
 
 intersperseBetweenRights :: Either a b -> [Either a b] -> [Either a b]
 intersperseBetweenRights _ [] = []
@@ -63,12 +67,6 @@ ungroupRights = concatMap (either (\a -> [Left a]) (map Right))
 isDelimiter :: String -> Bool
 isDelimiter "," = True
 isDelimiter s = all (== ' ') s
-
-str1 :: Char -> String
-str1 c = [c]
-
-chrString :: Int -> String
-chrString = str1 . chr
 
 tokensOf :: (a -> Bool) -> [a] -> [Either [a] [a]]
 tokensOf p ls

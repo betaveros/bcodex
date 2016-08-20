@@ -36,7 +36,7 @@ toMorse c = case Map.lookup (toLower c) toMorseMap of
     Nothing -> Left $ CxExtra [c]
 
 toMorseCodex :: CxList Char -> CxList Char
-toMorseCodex = ungroupRights . intersperseDelimSpaces . mapLefts f . bindRights toMorse
+toMorseCodex = ungroupWithDelimSpaces . mapLefts f . bindRights toMorse
     where f (CxDelim " ") = morseSpace
           f x = x
 
@@ -49,4 +49,4 @@ fromMorse s = case Map.lookup s fromMorseMap of
     Nothing -> Left $ CxBadString s
 
 fromMorseCodex :: CxList Char -> CxList Char
-fromMorseCodex = bindRights fromMorse . crunchMorseDelimiterLefts . concatMapRights (mapLefts CxExtra . tokensOf (`elem` ".-")) . groupRights
+fromMorseCodex = bindRights fromMorse . crunchMorseDelimiterLefts . concatMapGroupedRights (mapLefts CxExtra . tokensOf (`elem` ".-"))

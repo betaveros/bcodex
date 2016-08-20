@@ -81,7 +81,7 @@ toRadixToken radix blockSize =
 
 toRadixTokens :: Int -> Int -> CxList Int -> CxList Char
 toRadixTokens radix blockSize
-    = ungroupRights . intersperseDelimSpaces . bindRights (toRadixToken radix blockSize)
+    = ungroupWithDelimSpaces . bindRights (toRadixToken radix blockSize)
 toUpperRadixTokens :: Int -> Int -> CxList Int -> CxList Char
 toUpperRadixTokens radix blockSize = mapRights toUpper . toRadixTokens radix blockSize
 
@@ -90,11 +90,8 @@ fromRadixNumbers radix
     = map (either (Left . delimOrShrink) (Right . fromBaseDigits radix . map genDigitToInt)) . tokensOf (isGenDigit radix)
 
 fromRadixNumbersCodex :: Int -> CxList Char -> CxList Int
-fromRadixNumbersCodex radix = concatMapRights (fromRadixNumbers radix) . groupRights . shrinkExtraSpaces
-
-intToGenDigitString :: Int -> String
-intToGenDigitString = str1 . intToGenDigit
+fromRadixNumbersCodex radix = concatMapGroupedRights (fromRadixNumbers radix) . shrinkExtraSpaces
 
 toRadixNumbers :: Int -> CxList Int -> CxList Char
 toRadixNumbers radix
-    = expandExtraSpaces . ungroupRights . intersperseDelimSpaces . mapRights (map intToGenDigit . asBaseDigits radix)
+    = expandExtraSpaces . ungroupWithDelimSpaces . mapRights (map intToGenDigit . asBaseDigits radix)

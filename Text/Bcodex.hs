@@ -63,9 +63,9 @@ expectNumberMeaningAfter m s t = case readInt t of
 
 parseSingleCharCoder :: [String] -> Either String (CxCoder Char, [String])
 parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
-    ((Parse.radixTokenSynonym -> Right (r, a)) : rs) -> Right (Left $ concatMapRights (fromRadixStream r a) . groupRights, rs)
+    ((Parse.radixTokenSynonym -> Right (r, a)) : rs) -> Right (Left $ concatMapGroupedRights (fromRadixStream r a), rs)
     ((readInt -> Just n) : tokenstr : rs) -> case Parse.radixTokenSynonym tokenstr of
-        Right (r, a) -> Right (Left $ concatMapRights (fromRadixStream r (a*n)) . groupRights, rs)
+        Right (r, a) -> Right (Left $ concatMapGroupedRights (fromRadixStream r (a*n)), rs)
         Left e -> Left $ e ++ " after number " ++ show n ++ ", got " ++ show tokenstr
 
     ((Parse.baseSynonym -> Just b) : rs) -> Right (Left $ fromRadixNumbersCodex b, rs)
@@ -74,7 +74,7 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
         Right (Left $ fromRadixNumbersCodex b, rs)
 
     ((unpl -> "char") : rs) -> Right (Left . bindRights $ Right . ord, rs)
-    ("base64" : rs) -> Right (Left (concatMapRights fromBase64Codex . groupRights), rs)
+    ("base64" : rs) -> Right (Left $ concatMapGroupedRights fromBase64Codex, rs)
 
     ("alpha" : rs) -> Right (Left fromAlphaStreamCodex, rs)
     ("rot13" : rs)  -> Right (alphaStringCoder (+13), rs)
