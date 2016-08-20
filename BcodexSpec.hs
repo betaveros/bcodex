@@ -19,6 +19,7 @@ main = hspec $ do
 
             it "does not consider spaces delimiters" $ do
                 aps "alpha" [Right "a b c"] `shouldBe` Left [Right 1, Left (CxExtra " "), Right 2, Left (CxExtra " "), Right 3]
+                aps "alpha" [Right "S   PACE"] `shouldBe` Left [Right 19, Left (CxExtra "   "), Right 16, Right 1, Right 3, Right 5]
 
             it "does not expand content spaces" $ do
                 aps "alpha" [Right " "] `shouldBe` Left [Left (CxExtra " ")]
@@ -26,9 +27,11 @@ main = hspec $ do
 
             it "preserves known extra spaces" $ do
                 aps "alpha" [Right "a", Left (CxExtra " "), Right "b"] `shouldBe` Left [Right 1, Left (CxExtra " "), Right 2]
+                aps "alpha" [Right "m", Left (CxExtra "   "), Right "w"] `shouldBe` Left [Right 13, Left (CxExtra "   "), Right 23]
 
-            it "preserves known delimiter spaces" $ do
+            it "preserves known delimiter spaces and commas" $ do
                 aps "alpha" [Right "a", Left (CxDelim " "), Right "b"] `shouldBe` Left [Right 1, Left (CxDelim " "), Right 2]
+                aps "alpha" [Right "h", Left (CxDelim ","), Right "s"] `shouldBe` Left [Right 8, Left (CxDelim ","), Right 19]
 
         context "when working with numbers" $ do
             it "works" $ do
@@ -50,8 +53,10 @@ main = hspec $ do
                 aps "base 36" [Right "darn"] `shouldBe` Left [Right 620483]
 
             it "accepts commas as delimiters" $ do
+                aps "numbers" [Right "1,2"] `shouldBe` Left [Right 1, Left (CxDelim ","), Right 2]
                 aps "numbers" [Right "42,13,37"] `shouldBe` Left [Right 42, Left (CxDelim ","), Right 13, Left (CxDelim ","), Right 37]
-            it "does not accept double commas as delimiters" $ do
+            it "does not accept double or multiple commas as delimiters" $ do
+                aps "numbers" [Right "1,,,,,2"] `shouldBe` Left [Right 1, Left (CxExtra ",,,,,"), Right 2]
                 aps "numbers" [Right "42,,13,,37"] `shouldBe` Left [Right 42, Left (CxExtra ",,"), Right 13, Left (CxExtra ",,"), Right 37]
             it "does not accept other garbage as delimiters" $ do
                 aps "numbers" [Right "42;13.37"] `shouldBe` Left [Right 42, Left (CxExtra ";"), Right 13, Left (CxExtra "."), Right 37]
@@ -66,6 +71,7 @@ main = hspec $ do
                 aps "numbers" [Left (CxDelim "  ")] `shouldBe` Left [Left (CxDelim "  ")]
             it "shrinks extras" $ do
                 aps "numbers" [Left (CxExtra "  ")] `shouldBe` Left [Left (CxExtra " ")]
+                aps "numbers" [Left (CxExtra "   ")] `shouldBe` Left [Left (CxExtra "  ")]
 
         context "when working with tokens of digits" $ do
             it "works with bits" $ do
@@ -124,6 +130,8 @@ main = hspec $ do
         context "when working with shifts" $ do
             it "works" $
                 aps "shift 1" [Right "abcxyz"] `shouldBe` Right [Right "bcdyza"]
+            it "lets weird characters pass through" $
+                aps "shift 13" [Right "< cat.PNG~ >"] `shouldBe` Right [Right "< png.CAT~ >"]
 
         context "when working with filters" $ do
             it "can drop spaces" $
@@ -151,6 +159,7 @@ main = hspec $ do
                 api "to alpha" [Right 1, Left (CxDelim "  "), Right 2] `shouldBe` Right [Right "a", Left (CxExtra " "), Right "b"]
             it "preserves extra spaces" $ do
                 api "to alpha" [Left (CxExtra "  ")] `shouldBe` Right [Left (CxExtra "  ")]
+                api "to alpha" [Left (CxExtra "   ")] `shouldBe` Right [Left (CxExtra "   ")]
 
         context "when working with chars" $ do
             it "works" $ api "to chars" [Right 0x38, Right 0x76, Right 0x29] `shouldBe` Right [Right "8v)"]
@@ -161,6 +170,7 @@ main = hspec $ do
                 api "to chars" [Right 0x3e, Left (CxDelim "  "), Right 0x3c] `shouldBe` Right [Right ">", Left (CxExtra " "), Right "<"]
             it "preserves extra spaces" $ do
                 api "to chars" [Left (CxExtra "  ")] `shouldBe` Right [Left (CxExtra "  ")]
+                api "to chars" [Left (CxExtra "   ")] `shouldBe` Right [Left (CxExtra "   ")]
 
         context "when working with numbers" $ do
             it "works" $
@@ -258,6 +268,7 @@ main = hspec $ do
                     codexw "alpha to numbers" "       " `shouldBe` "        "
                 it "expands double spaces" $ do
                     codexw "alpha to numbers" "ab cd  ef   gh" `shouldBe` "1 2  3 4   5 6    7 8"
+                    codexw "alpha to numbers" "sp        ACE" `shouldBe` "19 16         1 3 5"
                 it "preserves spaces on roundtrip" $ do
                     codexw "alpha to numbers numbers to alpha" "a b" `shouldBe` "a b"
                     codexw "alpha to numbers numbers to alpha" "a  b" `shouldBe` "a  b"
@@ -291,10 +302,13 @@ main = hspec $ do
 
         context "when converting between bases" $ do
 
-            it "can convert numbers to binary" $ do codexw "numbers to binary" "0 1 2 3 4 5 6 7" `shouldBe` "0 1 10 11 100 101 110 111"
-            it "can convert binary to numbers" $ do codexw "binary to numbers" "0 1 10 11 100 101 110 111" `shouldBe` "0 1 2 3 4 5 6 7"
+            it "can convert numbers to binary" $
+                codexw "numbers to binary" "0 1 2 3 4 5 6 7" `shouldBe` "0 1 10 11 100 101 110 111"
+            it "can convert binary to numbers" $
+                codexw "binary to numbers" "0 1 10 11 100 101 110 111" `shouldBe` "0 1 2 3 4 5 6 7"
 
-            it "keeps junk" $ do codexw "numbers to binary" "0,1.2/3;4-5=6_7" `shouldBe` "0,1.10/11;100-101=110_111"
+            it "keeps junk" $
+                codexw "numbers to binary" "0,1.2/3;4-5=6_7" `shouldBe` "0,1.10/11;100-101=110_111"
             it "is invertible" $
                 forAll (listOf (arbitrary :: Gen (NonNegative Int))) (\ns ->
                     let s = unwords (map (show . getNonNegative) ns) in codexw "numbers to binary binary to numbers" s === s)
@@ -302,7 +316,7 @@ main = hspec $ do
                 codexw "numbers to binary" "0  1  2  3" `shouldBe` "0  1  10  11"
                 codexw "binary to numbers" "0  1  10  11" `shouldBe` "0  1  2  3"
             it "is mostly invertible despite garbage" $
-                forAll arbitrary $ (\s -> codexw "numbers to binary binary to numbers" s === codexw "numbers to numbers" s)
+                forAll arbitrary (\s -> codexw "numbers to binary binary to numbers" s === codexw "numbers to numbers" s)
 
         context "when working with characters" $ do
 
@@ -362,10 +376,10 @@ main = hspec $ do
                 forAll (listOf arbitrary) (\s -> codexw "atbash" (codexw "atbash" s) === s)
 
         context "when working with morse code" $ do
-            it "can convert from morse code" $ do
+            it "can convert from morse code" $
                 codexw "morse" "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----"
                     `shouldBe` "foo bar abcdefghijklmnopqrstuvwxyz1234567890"
-            it "can convert to morse code" $ do
+            it "can convert to morse code" $
                 codexw "to morse" "foo bar abcdefghijklmnopqrstuvwxyz1234567890"
                     `shouldBe` "..-. --- --- / -... .- .-. / .- -... -.-. -.. . ..-. --. .... .. .--- -.- .-.. -- -. --- .--. --.- .-. ... - ..- ...- .-- -..- -.-- --.. .---- ..--- ...-- ....- ..... -.... --... ---.. ----. -----"
             it "is invertible" $
@@ -374,33 +388,38 @@ main = hspec $ do
                     (\s -> codexw "to morse morse" s === s)
 
         context "when translating" $ do
-            it "can translate" $ do codexw "translate xyz to 01" "foo bar xyzzy" `shouldBe` "foo bar 01111"
+            it "can translate" $
+                codexw "translate xy to 01" "xyyx :) yxxy" `shouldBe` "0110 :) 1001"
+            it "can translate by lengthening second argument" $
+                codexw "translate xyz to 01" "foo bar xyzzy" `shouldBe` "foo bar 01111"
 
         context "when converting between cases" $ do
-            it "can convert to uppercase" $ do codexw "uppercase" "foo BAR baz QUUX" `shouldBe` "FOO BAR BAZ QUUX"
-            it "can convert to lowercase" $ do codexw "lowercase" "foo BAR baz QUUX" `shouldBe` "foo bar baz quux"
+            it "can convert to uppercase" $
+                codexw "uppercase" "foo BAR baz QUUX" `shouldBe` "FOO BAR BAZ QUUX"
+            it "can convert to lowercase" $
+                codexw "lowercase" "foo BAR baz QUUX" `shouldBe` "foo bar baz quux"
 
         context "when filtering" $ do
-            it "can filter letters" $ do codexw "filter letters" "foo BAR baz QUUX / quick brown fox" `shouldBe` "fooBARbazQUUXquickbrownfox"
-            it "can strip spaces" $ do codexw "strip spaces" "foo BAR baz QUUX / quick brown fox" `shouldBe` "fooBARbazQUUX/quickbrownfox"
-            it "can filter vowels" $ do codexw "filter vowels" "facetiously ;_; FACETIOUSLY" `shouldBe` "aeiouAEIOU"
-            it "can strip consonants" $ do codexw "strip consonants" "Functional programming in Haskell" `shouldBe` "uioa oai i ae"
+            it "can filter letters" $ codexw "filter letters" "foo BAR baz QUUX / quick brown fox" `shouldBe` "fooBARbazQUUXquickbrownfox"
+            it "can strip spaces" $ codexw "strip spaces" "foo BAR baz QUUX / quick brown fox" `shouldBe` "fooBARbazQUUX/quickbrownfox"
+            it "can filter vowels" $ codexw "filter vowels" "facetiously ;_; FACETIOUSLY" `shouldBe` "aeiouAEIOU"
+            it "can strip consonants" $ codexw "strip consonants" "Functional programming in Haskell" `shouldBe` "uioa oai i ae"
             it "only has letters after filtering" $
-                forAll arbitrary (\s -> all isLetter $ codexw "filter letters" s)
+                forAll arbitrary (all isLetter . codexw "filter letters")
             it "has no spaces after stripping" $
-                forAll arbitrary (\s -> not . any isSpace $ codexw "strip whitespace" s)
+                forAll arbitrary (not . any isSpace . codexw "strip whitespace")
 
         context "when round tripping to morse" $ do
-            it "handles stage 1" $ do codexw "alpha to numbers" "complex" `shouldBe` "3 15 13 16 12 5 24"
-            it "handles stage 2" $ do codexw "alpha to numbers to morse" "complex" `shouldBe` "...-- / .---- ..... / .---- ...-- / .---- -.... / .---- ..--- / ..... / ..--- ....-"
-            it "handles stage 3" $ do codexw "alpha to numbers to morse morse" "complex" `shouldBe` "3 15 13 16 12 5 24"
-            it "handles stage 4" $ do codexw "alpha to numbers to morse morse numbers to alpha" "complex" `shouldBe` "complex"
+            it "handles stage 1" $ codexw "alpha to numbers" "complex" `shouldBe` "3 15 13 16 12 5 24"
+            it "handles stage 2" $ codexw "alpha to numbers to morse" "complex" `shouldBe` "...-- / .---- ..... / .---- ...-- / .---- -.... / .---- ..--- / ..... / ..--- ....-"
+            it "handles stage 3" $ codexw "alpha to numbers to morse morse" "complex" `shouldBe` "3 15 13 16 12 5 24"
+            it "handles stage 4" $ codexw "alpha to numbers to morse morse numbers to alpha" "complex" `shouldBe` "complex"
 
         context "when round tripping to chars" $ do
-            it "handles stage 1" $ do codexw "chars to bytes" "6*9=42" `shouldBe` "36 2a 39 3d 34 32"
-            it "handles stage 2" $ do codexw "chars to bytes chars to bytes" "6*9=42" `shouldBe` "33 36 32 61 33 39 33 64 33 34 33 32"
-            it "handles stage 3" $ do codexw "chars to bytes chars to bytes bytes to chars" "6*9=42" `shouldBe` "362a393d3432"
-            it "handles stage 4" $ do codexw "chars to bytes chars to bytes bytes to chars bytes to chars" "6*9=42" `shouldBe` "6*9=42"
+            it "handles stage 1" $ codexw "chars to bytes" "6*9=42" `shouldBe` "36 2a 39 3d 34 32"
+            it "handles stage 2" $ codexw "chars to bytes chars to bytes" "6*9=42" `shouldBe` "33 36 32 61 33 39 33 64 33 34 33 32"
+            it "handles stage 3" $ codexw "chars to bytes chars to bytes bytes to chars" "6*9=42" `shouldBe` "362a393d3432"
+            it "handles stage 4" $ codexw "chars to bytes chars to bytes bytes to chars bytes to chars" "6*9=42" `shouldBe` "6*9=42"
 
     where aps :: String -> CxList String -> Either (CxList Int) (CxList String)
           aps = (right groupRights .) . (. ungroupRights) . applyCxCoder . either error id . parseCharCoder . words
