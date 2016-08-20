@@ -12,6 +12,7 @@ import Text.Bcodex.Utils (isRight)
 import Data.Maybe (fromMaybe)
 
 unpluralize :: String -> Maybe String
+unpluralize [] = Nothing
 unpluralize s = case last s of
     's' -> Just $ init s
     _   -> Nothing
@@ -55,7 +56,7 @@ filterType s = case s of
         "symbols"     -> cc isSymbol
         "*"           -> cc (const True)
 
-        '[':cs | last cs == ']' -> cc (`elem` init cs)
+        '[':(cs@(_:_)) | last cs == ']' -> cc (`elem` init cs)
 
         "good"    -> et isRight
         "bad"     -> et isBad
