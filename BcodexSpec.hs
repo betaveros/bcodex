@@ -97,11 +97,11 @@ main = hspec $ do
                 aps "base64" [Right "ZS4="] `shouldBe` Left [Right 101, Right 46]
             it "handles two equals" $
                 aps "base64" [Right "Lg=="] `shouldBe` Left [Right 46]
-            it "considers spaces bad strings" $ do
-                aps "base64" [Right "QQ== QQ==" ] `shouldBe` Left [Right 65, Left (CxBadString " " ), Right 65]
-                aps "base64" [Right "QQ==  QQ=="] `shouldBe` Left [Right 65, Left (CxBadString "  "), Right 65]
-            it "considers garbage bad strings" $ do
-                aps "base64" [Right "QQ==@**@QQ=="] `shouldBe` Left [Right 65, Left (CxBadString "@**@"), Right 65]
+            it "considers spaces extras" $ do
+                aps "base64" [Right "QQ== QQ==" ] `shouldBe` Left [Right 65, Left (CxExtra " " ), Right 65]
+                aps "base64" [Right "QQ==  QQ=="] `shouldBe` Left [Right 65, Left (CxExtra "  "), Right 65]
+            it "considers garbage extras" $
+                aps "base64" [Right "QQ==@**@QQ=="] `shouldBe` Left [Right 65, Left (CxExtra "@**@"), Right 65]
             it "preserves known delimiter spaces" $
                 aps "base64" [Right "QQ==", Left (CxDelim " "), Right "QQ=="] `shouldBe` Left [Right 65, Left (CxDelim " "), Right 65]
             it "preserves known extra spaces" $

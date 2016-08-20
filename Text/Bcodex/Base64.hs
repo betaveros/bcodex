@@ -73,4 +73,4 @@ toBase64Codex = mapOverGroupedRights toBase64 . bindRights ensureBase64
                                                 else Left . CxBadInt $ x
 
 fromBase64Codex :: String -> CxList Int
-fromBase64Codex = concatMapRights (either ((:[]) . Left . CxBadString) (map Right) . fromBase64) . mapLefts CxBadString . tokensOf isBase64Char
+fromBase64Codex = concatMapRights (either ((:[]) . Left . CxBadString) (map Right) . fromBase64) . mapLefts CxExtra . tokensOf isBase64Char
