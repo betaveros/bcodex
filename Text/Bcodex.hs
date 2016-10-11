@@ -112,7 +112,7 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
         Right (Right . mapAllChars $ (\x -> case x of
             ' ' -> '\n'
             _   -> x), rs)
-    ((Parse.caseSynonym -> Just f) : rs) -> Right (Right . mapAllChars $ f, rs)
+    ((Parse.charMapSynonym -> Just f) : rs) -> Right (Right . mapAllChars $ f, rs)
 
     ("raw" : rs) -> Right (Right (map Right . show), rs)
     ("purify" : rs) -> Right (Right (map Right . rights), rs)

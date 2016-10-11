@@ -1,7 +1,7 @@
 module Text.Bcodex.Parse (
     unpluralize, maybeUnpluralize,
     radixTokenSynonym, FilterType(..), filterType,
-    baseSynonym, caseSynonym,
+    baseSynonym, charMapSynonym,
     filterSynonym, arithmeticOperation) where
 
 import Data.Char (isAlpha, isDigit, isLetter, isSpace, isPunctuation,
@@ -9,6 +9,7 @@ import Data.Char (isAlpha, isDigit, isLetter, isSpace, isPunctuation,
 import Text.Bcodex.Alpha
 import Text.Bcodex.Cx
 import Text.Bcodex.Utils (isRight)
+import Text.Bcodex.Unicode
 import Data.Maybe (fromMaybe)
 
 unpluralize :: String -> Maybe String
@@ -80,14 +81,18 @@ baseSynonym s = case s of
     "hexadecimal" -> Just 16
     _ -> Nothing
 
-caseSynonym :: String -> Maybe (Char -> Char)
-caseSynonym s = case s of
+charMapSynonym :: String -> Maybe (Char -> Char)
+charMapSynonym s = case s of
     "upper"      -> Just toUpper
     "uppercase"  -> Just toUpper
     "uppercased" -> Just toUpper
     "lower"      -> Just toLower
     "lowercase"  -> Just toLower
     "lowercased" -> Just toLower
+    "fullwidth"  -> Just fullwidth
+    "halfwidth"  -> Just halfwidth
+    "circled"    -> Just circled
+    "uncircled"  -> Just uncircled
     _ -> Nothing
 
 filterSynonym :: String -> Maybe (Bool -> Bool)
