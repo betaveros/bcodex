@@ -4,6 +4,7 @@ module Text.Bcodex.Parse (
     baseSynonym, charMapSynonym,
     filterSynonym, arithmeticOperation) where
 
+import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR)
 import Data.Char (isAlpha, isDigit, isLetter, isSpace, isPunctuation,
     isSymbol, toUpper, toLower, GeneralCategory(Space), generalCategory)
 import Text.Bcodex.Alpha
@@ -119,4 +120,11 @@ arithmeticOperation s = case s of
     "x"        -> Just (*)
     "mod"      -> Just (flip mod)
     "mod1"     -> Just (flip mod1)
+    "/"        -> Just (flip quot)
+    "//"       -> Just (flip div)
+    "<<"       -> Just (flip shiftL)
+    ">>"       -> Just (flip shiftR)
+    "&"        -> Just (.&.)
+    "|"        -> Just (.|.)
+    "xor"      -> Just xor
     _ -> Nothing
