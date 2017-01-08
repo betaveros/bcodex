@@ -6,7 +6,8 @@ module Text.Bcodex.Parse (
 
 import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR)
 import Data.Char (isAlpha, isDigit, isLetter, isSpace, isPunctuation,
-    isSymbol, toUpper, toLower, GeneralCategory(Space), generalCategory)
+    isUpper, isLower, isSymbol, toUpper, toLower, GeneralCategory(Space),
+    generalCategory)
 import Text.Bcodex.Alpha
 import Text.Bcodex.Cx
 import Text.Bcodex.Utils (isRight)
@@ -45,6 +46,10 @@ filterType s = case s of
         "alpha"       -> cc isAlpha
         "letter"      -> cc isLetter
         "letters"     -> cc isLetter
+        "upper"       -> cc isUpper
+        "uppercase"   -> cc isUpper
+        "lower"       -> cc isLower
+        "lowercase"   -> cc isLower
         "digit"       -> cc isDigit
         "digits"      -> cc isDigit
         "number"      -> cc isDigit
