@@ -65,9 +65,13 @@ expectNumberMeaningAfter m s t = case readInt t of
 parseSingleCharCoder :: [String] -> Either String (CxCoder Char, [String])
 parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
     ((Parse.radixTokenSynonym -> Right (r, a)) : rs) -> Right (Left $ concatMapGroupedRights (fromRadixStream r a), rs)
+    ((readInt -> Just n) : "base" : radixstr : digitsstr : rs) -> case (readInt radixstr, digitsstr) of
+        (Just radix, "digits") -> Right (Left $ concatMapGroupedRights (fromRadixStream radix n), rs)
+        _ -> Left $ "Expected radix and 'digits' after number " ++ show n ++ " 'base', got " ++ show radixstr ++ " " ++ show digitsstr
+
     ((readInt -> Just n) : tokenstr : rs) -> case Parse.radixTokenSynonym tokenstr of
-        Right (r, a) -> Right (Left $ concatMapGroupedRights (fromRadixStream r (a*n)), rs)
-        Left e -> Left $ e ++ " after number " ++ show n ++ ", got " ++ show tokenstr
+        Right (radix, mul) -> Right (Left $ concatMapGroupedRights (fromRadixStream radix (mul*n)), rs)
+        Left e -> Left $ e ++ " (or 'base') after number " ++ show n ++ ", got " ++ show tokenstr
 
     ((Parse.baseSynonym -> Just b) : rs) -> Right (Left $ fromRadixNumbersCodex b, rs)
     ("base" : bstr : rs) -> do
@@ -140,9 +144,13 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
 
         ((unpl -> "base64") : rs) -> Right (Right   toBase64Codex, rs)
+        ((readInt -> Just n) : "base" : radixstr : digitsstr : rs) -> case (readInt radixstr, digitsstr) of
+            (Just radix, "digits") -> Right (Right $ toRadixTokens radix n, rs)
+            _ -> Left $ "Expected radix and 'digits' after 'to' number " ++ show n ++ " 'base', got " ++ show radixstr ++ " " ++ show digitsstr
+
         ((readInt -> Just n) : tokenstr : rs) -> case Parse.radixTokenSynonym tokenstr of
-            Right (r, a) -> Right (Right $ toRadixTokens r (a*n), rs)
-            Left e -> Left $ e ++ " after 'to' number " ++ show n ++ ", got " ++ show tokenstr
+            Right (radix, a) -> Right (Right $ toRadixTokens radix (a*n), rs)
+            Left e -> Left $ e ++ " (or 'base') after 'to' number " ++ show n ++ ", got " ++ show tokenstr
         (x : _) -> Left $ "Unexpected " ++ x ++ " after 'to'"
         [] -> Left "Unexpected end after 'to'"
 
