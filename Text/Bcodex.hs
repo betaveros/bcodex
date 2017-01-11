@@ -20,12 +20,32 @@ import Text.Bcodex.Base64
 import Text.Bcodex.Ascii
 import qualified Text.Bcodex.Parse as Parse
 -- }}}
--- translate {{{
+-- translate and swap {{{
+
+-- Given a map from some type to itself and a key, look up the key and return
+-- its value if found or the key itself if not.
+passthroughMapLookup :: (Ord a) => Map.Map a a -> a -> a
+passthroughMapLookup m k = fromMaybe k (Map.lookup k m)
+
+repeatLast :: [a] -> [a]
+repeatLast [x] = repeat x
+repeatLast (x:xs) = x : repeatLast xs
+repeatLast [] = error "repeatLast on empty list"
+
 translate :: String -> String -> Char -> Char
-translate from to = let m = Map.fromList (zip from (repeatLast to)) in \c -> fromMaybe c (Map.lookup c m)
-    where repeatLast [x] = repeat x
-          repeatLast (x:xs) = x : repeatLast xs
-          repeatLast [] = error "translate with empty from string"
+translate _    [] = error "translate with empty from string"
+translate from to = passthroughMapLookup $ Map.fromList (zip from (repeatLast to))
+
+repeatLastToEqualLength :: (Eq a) => [a] -> [a] -> ([a],[a])
+repeatLastToEqualLength xs ys = (take n $ repeatLast xs, take n $ repeatLast ys)
+    where n = max (length xs) (length ys)
+
+swapTranslate :: String -> String -> Char -> Char
+swapTranslate from to = passthroughMapLookup $ Map.fromListWith const (zip (f1 ++ t1) (t1 ++ f1))
+    where (f1, t1) = repeatLastToEqualLength from to
+    -- Map.fromListWith const will take the first value for duplicate keys (it
+    -- feels more often useful to me because "more important" characters get
+    -- listed first??)
 -- }}}
 -- fancy string things used in parsing and in-between CxCoders {{{
 readInt :: String -> Maybe Int
@@ -39,6 +59,15 @@ type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList Char)
 
 alphaStringCoder :: (Int -> Int) -> CxCoder Char
 alphaStringCoder = Right . fmap . fmap . mapUnderAlpha
+
+shiftInStringCoder :: String -> Int -> CxCoder Char
+shiftInStringCoder s delta' = Right . fmap . fmap $ passthroughMapLookup shiftMap
+    where delta = delta' `mod` length s
+          shiftMap = Map.fromListWith const $ zip s (drop delta s ++ take delta s)
+          -- Map.fromListWith const will take the first value for duplicate
+          -- keys (it feels more often useful to me, so that "shift in 011 by
+          -- 1" differs from "shift in 01 by 1"; but either way it's not a big
+          -- deal)
 
 asciiStringCoder :: (Int -> Int) -> CxCoder Char
 asciiStringCoder = Right . fmap . fmap . mapUnderAscii
@@ -85,11 +114,16 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
     ("rot13" : rs)  -> Right (alphaStringCoder (+13), rs)
     ("atbash" : rs) -> Right (alphaStringCoder (27-), rs)
     ("rot47" : rs)  -> Right (asciiStringCoder (+47), rs)
-    ("shift" : a : rs) -> do
-        n <- expectNumberMeaningAfter "shift amount" "shift" a
+    ("shift" : "in" : sis : byKeyword : amtStr : rs) -> case byKeyword of
+        "by" -> do
+            n <- expectNumberMeaningAfter "shift amount" "shift" amtStr
+            return (shiftInStringCoder sis n, rs)
+        _ -> Left $ "Shift in syntax should be 'shift in _ by _', got " ++ show byKeyword
+    ("shift" : amtStr : rs) -> do
+        n <- expectNumberMeaningAfter "shift amount" "shift" amtStr
         return (alphaStringCoder (+n), rs)
-    ("pshift" : a : rs) -> do
-        n <- expectNumberMeaningAfter "shift amount" "pshift" a
+    ("pshift" : amtStr : rs) -> do
+        n <- expectNumberMeaningAfter "shift amount" "pshift" amtStr
         return (asciiStringCoder (+n), rs)
 
     (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
@@ -112,6 +146,9 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
     ("translate" : csFrom : toKeyword : csTo : rs) -> case toKeyword of
         "to" -> Right (Right . mapAllChars $ translate csFrom csTo, rs)
         _ -> Left $ "Translate syntax should be 'translate _ to _', got " ++ show toKeyword
+    ("swap" : csFrom : withKeyword : csTo : rs) -> case withKeyword of
+        "with" -> Right (Right . mapAllChars $ swapTranslate csFrom csTo, rs)
+        _ -> Left $ "Swap syntax should be 'swap _ with _', got " ++ show withKeyword
     ("split-lines" : rs) ->
         Right (Right . mapAllChars $ (\x -> case x of
             ' ' -> '\n'
