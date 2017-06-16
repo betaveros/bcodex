@@ -99,6 +99,9 @@ charMapSynonym s = case s of
     "halfwidth"  -> Just halfwidth
     "circled"    -> Just circled
     "uncircled"  -> Just uncircled
+    "smallcaps"  -> Just officialUnicodeSmallCaps
+    "smallcaps+" -> Just hackySmallCaps
+    "unsmallcaps"-> Just unSmallCaps
     _ -> Nothing
 
 filterSynonym :: String -> Maybe (Bool -> Bool)

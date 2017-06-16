@@ -399,6 +399,16 @@ main = hspec $ do
             it "can convert to lowercase" $
                 codexw "lowercase" "foo BAR baz QUUX" `shouldBe` "foo bar baz quux"
 
+        context "when performing char maps" $ do
+            it "circled is invertible" $
+                forAll (listOf (choose ('a','z'))) (\s -> codexw "circled uncircled" s === s)
+            it "fullwidth is invertible" $
+                forAll (listOf (choose ('a','z'))) (\s -> codexw "fullwidth halfwidth" s === s)
+            it "smallcaps is invertible" $
+                forAll (listOf (choose ('a','z'))) (\s -> codexw "smallcaps unsmallcaps" s === s)
+            it "smallcaps+ is invertible" $
+                forAll (listOf (choose ('a','z'))) (\s -> codexw "smallcaps+ unsmallcaps" s === s)
+
         context "when filtering" $ do
             it "can filter letters" $ codexw "filter letters" "foo BAR baz QUUX / quick brown fox" `shouldBe` "fooBARbazQUUXquickbrownfox"
             it "can strip spaces" $ codexw "strip spaces" "foo BAR baz QUUX / quick brown fox" `shouldBe` "fooBARbazQUUX/quickbrownfox"
