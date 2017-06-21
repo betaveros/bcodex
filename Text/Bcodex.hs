@@ -14,6 +14,7 @@ import Text.Bcodex.Cx
 import Text.Bcodex.Alpha
 import Text.Bcodex.Radix
 import Text.Bcodex.Morse
+import Text.Bcodex.Braille
 import Text.Bcodex.Utils
 import Text.Bcodex.CxUtils
 import Text.Bcodex.Base64
@@ -129,6 +130,10 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
     (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
 
+    ((unpl -> "braille-pattern") : rs) -> Right (Left fromBraillePatternCodex, rs)
+    (       "braille" : rs) -> Right (Right $ bindRights fromBraille, rs)
+    ("to" : "braille" : rs) -> Right (Right $ bindRights   toBraille, rs)
+
     (f0@(Parse.filterSynonym -> Just f) : p0 : rs) -> case Parse.filterType p0 of
         Just (Parse.CharClass cc)  -> Right (Right . concatMapAllChars $ filter (f . cc) . (:[]), rs)
         Just (Parse.CxElemType et) -> Right (Right $ filter (f . et), rs)
@@ -181,6 +186,7 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         ((unpl -> "Alpha" ) : rs) -> Right (Right   toUpperAlphaStream, rs)
 
         ((unpl -> "base64") : rs) -> Right (Right   toBase64Codex, rs)
+        ((unpl -> "braille-pattern") : rs) -> Right (Right toBraillePatternCodex, rs)
         ((readInt -> Just n) : "base" : radixstr : digitsstr : rs) -> case (readInt radixstr, digitsstr) of
             (Just radix, "digits") -> Right (Right $ toRadixTokens radix n, rs)
             _ -> Left $ "Expected radix and 'digits' after 'to' number " ++ show n ++ " 'base', got " ++ show radixstr ++ " " ++ show digitsstr

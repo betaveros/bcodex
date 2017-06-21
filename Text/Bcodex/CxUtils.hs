@@ -11,8 +11,10 @@ module Text.Bcodex.CxUtils (
     mapAllChars,
     freezeCharClass, freezeElemType,
     unfreezeCharClass, unfreezeElemType,
-    mapExtraStringGroups, shrinkExtraSpaces, expandExtraSpaces) where
+    mapExtraStringGroups, shrinkExtraSpaces, expandExtraSpaces,
+    cxLines) where
 
+import Control.Arrow (first)
 import Data.Maybe (mapMaybe)
 import Text.Bcodex.Cx
 import Text.Bcodex.Utils
@@ -122,3 +124,36 @@ shrinkExtraSpaces = mapExtraStringGroups shrinkSpaces
 
 expandExtraSpaces :: CxList a -> CxList a
 expandExtraSpaces = mapExtraStringGroups expandSpaces
+
+-- Unlike `lines` this will not ignore a trailing newline
+-- It also returns the first line, which always exists, separate from the
+-- remaining lines, so the type signature better captures what it does.
+-- Using Data.List.NonEmpty would slightly simplify matters, but I don't think
+-- one use is quite enough to justify that dependency...
+splitByNewlines :: String -> (String, [String])
+splitByNewlines ""       = ("", [])
+splitByNewlines ('\n':s) = ("", uncurry (:) $ splitByNewlines s)
+splitByNewlines ( c  :s) = first (c:) $ splitByNewlines s
+
+-- I have a feeling I should trade off some correctness for simplicity here...
+cxElemLines :: CxElem Char -> (CxList Char, [CxList Char])
+cxElemLines (Right '\n') = ([], [[]])
+cxElemLines (Right c)    = ([Right c], [])
+cxElemLines (Left lf) = case lf of
+        CxBadString s -> go CxBadString s
+        CxExtra     s -> go CxExtra     s
+        CxDelim     s -> go CxDelim     s
+        CxBadInt    n -> ([Left $ CxBadInt n], [])
+        CxFrozen    c -> ([Left $ CxFrozen c], [])
+    where go :: (String -> CxLeft) -> String -> (CxList a, [CxList a])
+          go f s = let f' = (:[]) . Left . f in case splitByNewlines s of
+                (line1, rst) -> (f' line1, map f' rst)
+
+consToSnoc :: (a, [a]) -> ([a], a)
+consToSnoc (x, []) = ([], x)
+consToSnoc (x, (x2:xs)) = let (ys, y) = consToSnoc (x2, xs) in (x:ys, y)
+
+cxLines :: CxList Char -> [CxList Char]
+cxLines [] = [[]]
+cxLines (x:xs) = case consToSnoc (cxElemLines x) of
+    (els, el) -> let (ln : lns) = cxLines xs in els ++ (el ++ ln) : lns
