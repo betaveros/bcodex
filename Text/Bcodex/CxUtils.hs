@@ -12,10 +12,11 @@ module Text.Bcodex.CxUtils (
     freezeCharClass, freezeElemType,
     unfreezeCharClass, unfreezeElemType,
     mapExtraStringGroups, shrinkExtraSpaces, expandExtraSpaces,
-    cxLines) where
+    cxLines, cxInterleaveLinesBy) where
 
 import Control.Arrow (first)
 import Data.Maybe (mapMaybe)
+import Data.List (transpose, intercalate)
 import Text.Bcodex.Cx
 import Text.Bcodex.Utils
 
@@ -157,3 +158,7 @@ cxLines :: CxList Char -> [CxList Char]
 cxLines [] = [[]]
 cxLines (x:xs) = case consToSnoc (cxElemLines x) of
     (els, el) -> let (ln : lns) = cxLines xs in els ++ (el ++ ln) : lns
+
+cxInterleaveLinesBy :: Int -> CxList Char -> CxList Char
+cxInterleaveLinesBy n = intercalate [Left $ CxDelim "\n"] .
+    map (concat . transpose) . splitInto n . cxLines

@@ -154,6 +154,10 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
     ("swap" : csFrom : withKeyword : csTo : rs) -> case withKeyword of
         "with" -> Right (Right . mapAllChars $ swapTranslate csFrom csTo, rs)
         _ -> Left $ "Swap syntax should be 'swap _ with _', got " ++ show withKeyword
+    ("interleave" : nStr : rs) -> do
+        n <- expectNumberMeaningAfter "number of lines" "interleave" nStr
+        return (Right $ cxInterleaveLinesBy n, rs)
+
     ("split-lines" : rs) ->
         Right (Right . mapAllChars $ (\x -> case x of
             ' ' -> '\n'
