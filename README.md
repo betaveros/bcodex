@@ -50,6 +50,63 @@ Other usages:
 - `bcodex shift 7`
 - `bcodex uppercase`
 
+Coders
+======
+
+Characters to numbers
+
+- `<number> base <number> digits`
+- `<number> bits`; `<number> digits`; `<number> nybbles`; `<number> bytes` (2x`<number>` nybbles)
+- `base <number>`; `number[s]`, `decimal`; `bin[ary]`; `oct[al]`; `hex[adecimal]`
+- `char[s]`
+- `base64`
+- `alpha`
+
+Characters to characters
+
+- `rot13`; `shift <num>`
+- `atbash`
+- `shift <num>`
+- `shift in <str> by <num>`
+- `rot47`; `pshift <num>` (shift in printable characters)
+- `morse`
+- `to morse`
+- `braille-pattern`
+- `braille`
+- `to braille`
+- `filter|keep|only|take <class>`
+- `strip|drop <class>`
+- `freeze <class>`
+- `unfreeze <class>`
+- `translate <chars> to <chars>`
+- `swap <chars> with <chars>`
+- `interleave <num>`
+- `split-lines`
+- `upper[case[d]]`; `lower[case[d]]`
+- `fullwidth`; `halfwidth`; `circled`; `uncircled`; `smallcaps`; `smallcaps+`; `unsmallcaps`
+- `raw`
+- `purify`
+
+Numbers to characters
+
+- `to bit[s]`; `to nybble[s]`; `to Nybble[s]`; `to byte[s]`; `to Byte[s]`;
+- `to <num> bit[s]`; `to <num> nybble[s]`; `to <num> Nybble[s]`; `to <num> byte[s]`; `to <num> Byte[s]`;
+- `to numbers`
+- `to base <num>`
+- `to char[s]`
+- `to printable[s]`
+- `to alpha`; `to Alpha`
+- `to base64`
+- `to braille-pattern[s]`
+- `to <num> base <num> digits`
+- `negate[d]`
+- `raw`
+
+Numbers to numbers
+
+- `plus|add|+ <num>`; `minus|subtract|- <num>`; `times|multiply|*|x <num>`; `mod <num>`; `mod1 <num>`; `/ <num>`; `// <num>`; `<< <num>`; `>> <num>`; `& <num>`; `| <num>`; `xor <num>`
+- `purify`
+
 License
 =======
 
