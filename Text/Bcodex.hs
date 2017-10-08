@@ -154,6 +154,7 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
     ("swap" : csFrom : withKeyword : csTo : rs) -> case withKeyword of
         "with" -> Right (Right . mapAllChars $ swapTranslate csFrom csTo, rs)
         _ -> Left $ "Swap syntax should be 'swap _ with _', got " ++ show withKeyword
+    ("reverse-words" : rs) -> Right (Right $ cxReverseWords, rs)
     ("distribute" : nStr : rs) -> do
         n <- expectNumberMeaningAfter "number of lines" "distribute" nStr
         return (Right $ cxDistributeLinesTo n, rs)
