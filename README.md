@@ -61,6 +61,7 @@ Characters to numbers
 - `char[s]`
 - `base64`
 - `alpha`
+- `braille-pattern` (Unicode Braille characters to their codepoint offsets from U+2800 BRAILLE PATTERN BLANK, which encode their dots in binary)
 
 Characters to characters
 
@@ -71,7 +72,6 @@ Characters to characters
 - `rot47`; `pshift <num>` (shift in printable characters)
 - `morse`
 - `to morse`
-- `braille-pattern`
 - `braille`
 - `to braille`
 - `filter|keep|only|take <class>`
