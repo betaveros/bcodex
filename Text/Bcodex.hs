@@ -4,7 +4,7 @@ module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, applyCxCo
 -- imports {{{
 import Control.Arrow (left)
 import Control.Applicative ((<$>))
-import Data.Char (ord, chr)
+import Data.Char (ord, chr, isLetter)
 import Data.Maybe (fromMaybe)
 import Data.Either (rights)
 import qualified Data.Map as Map
@@ -19,6 +19,7 @@ import Text.Bcodex.Utils
 import Text.Bcodex.CxUtils
 import Text.Bcodex.Base64
 import Text.Bcodex.Ascii
+import Text.Bcodex.IntExpr
 import qualified Text.Bcodex.Parse as Parse
 -- }}}
 -- translate and swap {{{
@@ -58,8 +59,13 @@ unpl = Parse.maybeUnpluralize
 -- CxCoders {{{
 type CxCoder a = Either (CxList a -> CxList Int) (CxList a -> CxList Char)
 
-alphaStringCoder :: (Int -> Int) -> CxCoder Char
-alphaStringCoder = Right . fmap . fmap . mapUnderAlpha
+-- Right ([Either CxLeft Char] -> [Either CxLeft Char]) :: CxCoder Char
+
+alphaStringCoder :: (Char -> Bool) -> [Int -> Int] -> CxCoder Char
+alphaStringCoder p = Right . zipApplySomeRights p . map mapUnderAlpha
+
+asciiStringCoder :: (Char -> Bool) -> [Int -> Int] -> CxCoder Char
+asciiStringCoder p = Right . zipApplySomeRights p . map mapUnderAscii
 
 shiftInStringCoder :: String -> Int -> CxCoder Char
 shiftInStringCoder s delta' = Right . fmap . fmap $ passthroughMapLookup shiftMap
@@ -69,9 +75,6 @@ shiftInStringCoder s delta' = Right . fmap . fmap $ passthroughMapLookup shiftMa
           -- keys (it feels more often useful to me, so that "shift in 011 by
           -- 1" differs from "shift in 01 by 1"; but either way it's not a big
           -- deal)
-
-asciiStringCoder :: (Int -> Int) -> CxCoder Char
-asciiStringCoder = Right . fmap . fmap . mapUnderAscii
 
 rcompose :: (CxList a -> CxList b) -> CxCoder b -> CxCoder a
 rcompose f (Left f') = Left (f' . f)
@@ -91,6 +94,12 @@ expectNumberMeaningAfter :: String -> String -> String -> Either String Int
 expectNumberMeaningAfter m s t = case readInt t of
     Just n -> Right n
     Nothing -> Left $ "Expecting number (" ++ m ++ ") after '" ++ s ++ "', got unexpected " ++ show t
+
+expectIntExprMeaningAfter :: String -> String -> String -> Either String [Int]
+expectIntExprMeaningAfter m s t = case parseIntExpr t of
+    Just n -> Right n
+    Nothing -> Left $ "Expecting integer expression (" ++ m ++ ") after '" ++ s ++ "', got unexpected " ++ show t
+
 
 parseSingleCharCoder :: [String] -> Either String (CxCoder Char, [String])
 parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
@@ -112,20 +121,26 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
     ("base64" : rs) -> Right (Left $ concatMapGroupedRights fromBase64Codex, rs)
 
     ("alpha" : rs) -> Right (Left fromAlphaStreamCodex, rs)
-    ("rot13" : rs)  -> Right (alphaStringCoder (+13), rs)
-    ("atbash" : rs) -> Right (alphaStringCoder (27-), rs)
-    ("rot47" : rs)  -> Right (asciiStringCoder (+47), rs)
+    ("rot13" : rs)  -> Right (alphaStringCoder isLetter $ repeat (+13), rs)
+    ("atbash" : rs) -> Right (alphaStringCoder isLetter $ repeat (27-), rs)
+    ("rot47" : rs)  -> Right (asciiStringCoder isPrintableAscii $ repeat (+47), rs)
     ("shift" : "in" : sis : byKeyword : amtStr : rs) -> case byKeyword of
         "by" -> do
             n <- expectNumberMeaningAfter "shift amount" "shift" amtStr
             return (shiftInStringCoder sis n, rs)
         _ -> Left $ "Shift in syntax should be 'shift in _ by _', got " ++ show byKeyword
     ("shift" : amtStr : rs) -> do
-        n <- expectNumberMeaningAfter "shift amount" "shift" amtStr
-        return (alphaStringCoder (+n), rs)
+        ns <- expectIntExprMeaningAfter "shift amount" "shift" amtStr
+        return (alphaStringCoder isLetter $ map (+) ns, rs)
     ("pshift" : amtStr : rs) -> do
-        n <- expectNumberMeaningAfter "shift amount" "pshift" amtStr
-        return (asciiStringCoder (+n), rs)
+        ns <- expectIntExprMeaningAfter "shift amount" "pshift" amtStr
+        return (asciiStringCoder isPrintableAscii $ map (+) ns, rs)
+    ("shift!" : amtStr : rs) -> do
+        ns <- expectIntExprMeaningAfter "shift amount" "shift!" amtStr
+        return (alphaStringCoder (const True) $ map (+) ns, rs)
+    ("pshift!" : amtStr : rs) -> do
+        ns <- expectIntExprMeaningAfter "shift amount" "pshift!" amtStr
+        return (asciiStringCoder (const True) $ map (+) ns, rs)
 
     (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
@@ -206,8 +221,8 @@ parseSingleIntCoder s = left ("Could not parse int coder: " ++) $ case s of
         [] -> Left "Unexpected end after 'to'"
 
     (ostr@(Parse.arithmeticOperation -> Just o) : nstr : rs) -> do
-        n <- expectNumberMeaningAfter "operand" ostr nstr
-        Right (Left . fmap . fmap $ o n, rs)
+        ns <- expectIntExprMeaningAfter "operand" ostr nstr
+        Right (Left . zipApplySomeRights (const True) $ map o ns, rs)
     ("negate"  : rs) -> Right (Left . fmap $ fmap negate, rs)
     ("negated" : rs) -> Right (Left . fmap $ fmap negate, rs)
 

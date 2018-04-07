@@ -13,7 +13,8 @@ module Text.Bcodex.CxUtils (
     unfreezeCharClass, unfreezeElemType,
     mapExtraStringGroups, shrinkExtraSpaces, expandExtraSpaces,
     cxLines, cxReverseWords,
-    cxDistributeLinesTo, cxInterleaveLinesBy) where
+    cxDistributeLinesTo, cxInterleaveLinesBy,
+    zipApplySomeRights) where
 
 import Control.Arrow (first)
 import Data.Maybe (mapMaybe)
@@ -171,3 +172,12 @@ cxDistributeLinesTo n = intercalate [Left $ CxDelim "\n"] .
 cxInterleaveLinesBy :: Int -> CxList Char -> CxList Char
 cxInterleaveLinesBy n = intercalate [Left $ CxDelim "\n"] .
     map (concat . transpose) . splitInto n . cxLines
+
+zipApplySomeRights :: (a -> Bool) -> [a -> a] -> CxList a -> CxList a
+zipApplySomeRights _ _ [] = []
+zipApplySomeRights g fs (Left e : xs) = Left e : zipApplySomeRights g fs xs
+zipApplySomeRights g fs (Right x : xs)
+    | g x = case fs of
+        (f:fs') -> Right (f x) : zipApplySomeRights g fs' xs
+        [] ->                    zipApplySomeRights g []  xs
+    | otherwise =  Right    x  : zipApplySomeRights g fs  xs

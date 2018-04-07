@@ -1,10 +1,13 @@
 -- To be technically correct this module would be called
 -- VisiblePrintableAscii. The main function we're interested in, mimicking
 -- Alpha, is really just intended to make ROT47 possible.
-module Text.Bcodex.Ascii (mapUnderAscii, visiblePrintableChr, visiblePrintableChrString) where
+module Text.Bcodex.Ascii (isPrintableAscii, mapUnderAscii, visiblePrintableChr, visiblePrintableChrString) where
 
 import Text.Bcodex.Cx
 import Data.Char (ord, chr)
+
+isPrintableAscii :: Char -> Bool
+isPrintableAscii ch = '!' <= ch && ch <= '~'
 
 mapUnderAscii :: (Int -> Int) -> Char -> Char
 mapUnderAscii f ch

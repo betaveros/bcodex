@@ -132,6 +132,14 @@ main = hspec $ do
                 aps "shift 1" [Right "abcxyz"] `shouldBe` Right [Right "bcdyza"]
             it "lets weird characters pass through" $
                 aps "shift 13" [Right "< cat.PNG~ >"] `shouldBe` Right [Right "< png.CAT~ >"]
+            it "shifts by i, skipping punctuation" $
+                aps "shift i" [Right "aaa; aaa?"] `shouldBe` Right [Right "abc; def?"]
+            it "shifts by 2i" $
+                aps "shift 2i" [Right "aaa; aaa!"] `shouldBe` Right [Right "ace; gik!"]
+            it "shifts by 3i+1" $
+                aps "shift 3i+1" [Right "aaa; aaa!"] `shouldBe` Right [Right "beh; knq!"]
+            it "counts punctuation with exclamation mark" $
+                aps "shift! i" [Right "aaa; aaa?"] `shouldBe` Right [Right "abc; fgh?"]
 
         context "when working with filters" $ do
             it "can drop spaces" $
