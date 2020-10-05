@@ -5,7 +5,7 @@ module Text.Bcodex (CxLeft(..), CxElem, CxList, CxCoder, applyCxCoder, applyCxCo
 import Control.Arrow (left)
 import Control.Applicative ((<$>))
 import Data.Char (ord, chr, isLetter)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, catMaybes)
 import Data.Either (rights)
 import qualified Data.Map as Map
 import Text.Read (readMaybe)
@@ -141,6 +141,14 @@ parseSingleCharCoder s = left ("Could not parse string coder: " ++) $ case s of
     ("pshift!" : amtStr : rs) -> do
         ns <- expectIntExprMeaningAfter "shift amount" "pshift!" amtStr
         return (asciiStringCoder (const True) $ map (+) ns, rs)
+
+    ("vigenere" : key : rs) -> case catMaybes (map alphaToInt key) of
+        [] -> error "cannot vigenere with empty key"
+        ss -> return (alphaStringCoder isLetter $ cycle (map ((+) . subtract 1) ss), rs)
+
+    ("unvigenere" : key : rs) -> case catMaybes (map alphaToInt key) of
+        [] -> error "cannot vigenere with empty key"
+        ss -> return (alphaStringCoder isLetter $ cycle (map (subtract . subtract 1) ss), rs)
 
     (       "morse" : rs) -> Right (Right fromMorseCodex, rs)
     ("to" : "morse" : rs) -> Right (Right toMorseCodex, rs)
